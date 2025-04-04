@@ -3,8 +3,8 @@ mod rendering;
 use bevy::DefaultPlugins;
 use bevy::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use rendering::DebugRenderPlugin;
 use rendering::CameraPlugin;
+use rendering::DebugRenderPlugin;
 
 fn main() {
     App::new()
@@ -13,6 +13,7 @@ fn main() {
         .add_plugins(DebugRenderPlugin)
         .add_plugins(CameraPlugin)
         .add_systems(Startup, setup_scene)
+        .add_systems(Startup, spawn_gltf)
         .run();
 }
 
@@ -44,5 +45,14 @@ fn setup_scene(
             ..default()
         },
         Transform::from_translation(camera_pos).looking_at(Vec3::ZERO, Vec3::Y),
-     ));
+    ));
+}
+
+fn spawn_gltf(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let model_scene = asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/plane.gltf"));
+    commands.spawn((
+            SceneRoot(model_scene), 
+            Transform::from_xyz(4.0, 2.0, 4.0).with_scale(Vec3::new(4.0,4.0,4.0)),
+        )
+    );
 }

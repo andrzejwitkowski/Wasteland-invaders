@@ -6622,6 +6622,7 @@ dependencies = [
  "bevy 0.15.3",
  "bevy-inspector-egui 0.30.0",
  "bevy_editor_pls",
+ "bevy_gltf",
  "rand 0.9.0",
 ]
 
