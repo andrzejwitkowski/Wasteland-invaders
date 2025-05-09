@@ -1,17 +1,23 @@
 mod rendering;
 
-use bevy::DefaultPlugins;
 use bevy::prelude::*;
+use bevy_inspector_egui::bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rendering::CameraPlugin;
 use rendering::DebugRenderPlugin;
+use rendering::InputPlugin;
+use rendering::AnimationPlugin;
+use rendering::input::ControllablePlane;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugins(EguiPlugin { enable_multipass_for_primary_context: true })
         .add_plugins(WorldInspectorPlugin::new())
         .add_plugins(DebugRenderPlugin)
         .add_plugins(CameraPlugin)
+        .add_plugins(InputPlugin)
+        .add_plugins(AnimationPlugin)
         .add_systems(Startup, setup_scene)
         .add_systems(Startup, spawn_gltf)
         .run();
@@ -22,37 +28,33 @@ fn setup_scene(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    // Spawn a much larger ground plane to ensure full coverage
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(200.0, 200.0))),
-        MeshMaterial3d(materials.add(Color::srgb(0.5, 0.5, 0.5))),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(200.0, 1000.0))), // Much wider and longer
+        MeshMaterial3d(materials.add(Color::srgb(0.2, 0.3, 0.8))), // Blue-ish color for water
+        Transform::from_xyz(0.0, -0.1, -400.0), // Centered, slightly below 0 and extending forward more
     ));
 
-    //spawn cube above the plane
-    let cube_size = 1.0;
-    let cube_half_size = cube_size * 0.5;
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::default())),
-        MeshMaterial3d(materials.add(Color::srgb(1.0, 0.5, 0.5))),
-        Transform::from_xyz(8.0, cube_half_size, 8.0),
-    ));
-
-    let camera_pos = Vec3::new(20.0, 35.0, 20.0);
-
+    // Spawn directional light
+    let light_pos = Vec3::new(0.0, 50.0, 0.0);
     commands.spawn((
         DirectionalLight {
             color: Color::WHITE,
-            illuminance: 10000.0,
+            illuminance: 15000.0,
             ..default()
         },
-        Transform::from_translation(camera_pos).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_translation(light_pos).looking_at(Vec3::ZERO, Vec3::Z),
     ));
 }
 
 fn spawn_gltf(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let model_scene = asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/plane.gltf"));
+    // Load and spawn the GLTF model - positioned at bottom center
+    let model_scene = asset_server.load("models/plane.gltf#Scene0");
     commands.spawn((
-            SceneRoot(model_scene), 
-            Transform::from_xyz(4.0, 2.0, 4.0).with_scale(Vec3::new(4.0,4.0,4.0)),
-        )
-    );
+        SceneRoot::from(model_scene),
+        Transform::from_xyz(0.0, 2.0, -5.0) // Changed to negative Z to be visible in camera view
+            .with_scale(Vec3::new(2.0, 2.0, 2.0))
+            .with_rotation(Quat::IDENTITY),
+        ControllablePlane,
+    ));
 }
