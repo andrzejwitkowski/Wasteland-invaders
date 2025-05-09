@@ -19,28 +19,26 @@ impl Plugin for SplinePlugin {
 fn spawn_spline(mut commands: Commands) {
     let mut rng = rand::rng();
     
-    // Generate 3-4 control points for the spline
-    // Start from top of screen
+    // Generate control points for the Bézier curve
     let mut points = vec![
         Vec3::new(
-            rng.random_range(-30.0..30.0), // x random within visible area
-            0.1,                           // y slightly above ground level
-            0.0                            // z at start
+            rng.random_range(-30.0..30.0),
+            0.1,
+            0.0
         )
     ];
     
-    // Add 1-2 control points in between
-    let num_middle_points = rng.random_range(1..=2);
-    for i in 0..num_middle_points {
-        let t = (i + 1) as f32 / (num_middle_points + 1) as f32;
+    // Add control points
+    let num_control_points = rng.random_range(2..=3);
+    for i in 0..num_control_points {
+        let t = (i + 1) as f32 / (num_control_points + 1) as f32;
         points.push(Vec3::new(
             rng.random_range(-30.0..30.0),
             0.1,
-            -t * 100.0 // Spread points along Z axis
+            -t * 100.0
         ));
     }
     
-    // End point at bottom of screen
     points.push(Vec3::new(
         rng.random_range(-30.0..30.0),
         0.1,
@@ -52,6 +50,40 @@ fn spawn_spline(mut commands: Commands) {
     });
 }
 
+// Compute point on a Bézier curve at parameter t
+fn bezier_point(control_points: &[Vec3], t: f32) -> Vec3 {
+    let n = control_points.len() - 1;
+    let mut point = Vec3::ZERO;
+    
+    for i in 0..=n {
+        let binomial = binomial_coefficient(n, i);
+        let t_complement = 1.0 - t;
+        let factor = binomial as f32 * t_complement.powi((n - i) as i32) * t.powi(i as i32);
+        point += control_points[i] * factor;
+    }
+    
+    point
+}
+
+// Calculate binomial coefficient (n choose k)
+fn binomial_coefficient(n: usize, k: usize) -> usize {
+    if k > n {
+        return 0;
+    }
+    if k == 0 || k == n {
+        return 1;
+    }
+    
+    let k = k.min(n - k); // Use symmetry to reduce calculations
+    let mut result = 1;
+    
+    for i in 0..k {
+        result = result * (n - i) / (i + 1);
+    }
+    
+    result
+}
+
 fn draw_spline(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -59,25 +91,27 @@ fn draw_spline(
     splines: Query<&Spline>,
 ) {
     for spline in splines.iter() {
-        // Draw line segments between control points
-        for points in spline.control_points.windows(2) {
+        // Number of segments to divide the curve into
+        const SEGMENTS: usize = 50;
+        
+        // Generate points along the Bézier curve
+        let mut curve_points = Vec::with_capacity(SEGMENTS + 1);
+        for i in 0..=SEGMENTS {
+            let t = i as f32 / SEGMENTS as f32;
+            curve_points.push(bezier_point(&spline.control_points, t));
+        }
+        
+        // Draw segments between curve points
+        for points in curve_points.windows(2) {
             let start = points[0];
             let end = points[1];
             let direction = (end - start).normalize();
             let length = (end - start).length();
             
-            // Create a thin box mesh for the line segment
+            // Create a thin box mesh for the segment
             let line = Cuboid::new(0.2, 0.2, length);
             let rotation = Quat::from_rotation_arc(Vec3::Z, direction);
-
-            /*
-                commands.spawn((
-                    Mesh3d(meshes.add(Plane3d::default().mesh().size(200.0, 1000.0))), // Much wider and longer
-                    MeshMaterial3d(materials.add(Color::srgb(0.2, 0.3, 0.8))), // Blue-ish color for water
-                    Transform::from_xyz(0.0, -0.1, -400.0), // Centered, slightly below 0 and extending forward more
-                ));
-             */
-
+            
             commands.spawn(
                 (
                     Mesh3d(meshes.add(line)),
@@ -86,10 +120,9 @@ fn draw_spline(
                         ..default()
                     })),
                     Transform::from_translation(start + direction * length * 0.5)
-                        .with_rotation(rotation)
-                ),
+                        .with_rotation(rotation),
+                )
             );
-
         }
     }
 }
