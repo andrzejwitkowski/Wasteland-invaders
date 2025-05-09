@@ -14,6 +14,7 @@ impl Plugin for AnimationPlugin {
 struct PlaneAnimationState {
     target_roll: f32,
     current_roll: f32,
+    initial_rotation: Option<Quat>,
 }
 
 fn plane_swing_animation(
@@ -27,27 +28,35 @@ fn plane_swing_animation(
     const ROLL_SPEED: f32 = 3.0;
     const RETURN_SPEED: f32 = 2.0;
 
-    // Determine target roll based on input
-    if keyboard.pressed(KeyCode::ArrowLeft) {
-        anim_state.target_roll = MAX_ROLL;
-    } else if keyboard.pressed(KeyCode::ArrowRight) {
-        anim_state.target_roll = -MAX_ROLL;
-    } else {
-        anim_state.target_roll = 0.0;
-    }
-
-    // Smoothly interpolate current roll to target
-    let delta = time.elapsed().as_secs_f32();
-    let speed = if anim_state.target_roll == 0.0 { RETURN_SPEED } else { ROLL_SPEED };
-    anim_state.current_roll = lerp(
-        anim_state.current_roll,
-        anim_state.target_roll,
-        delta * speed
-    );
-
-    // Apply rotation to plane - now we set the absolute rotation instead of multiplying
+    // Get the transform
     if let Ok(mut transform) = query.single_mut() {
-        transform.rotation = Quat::from_rotation_z(anim_state.current_roll);
+        // Store initial rotation if we haven't yet
+        if anim_state.initial_rotation.is_none() {
+            anim_state.initial_rotation = Some(transform.rotation);
+        }
+
+        // Determine target roll based on input
+        if keyboard.pressed(KeyCode::ArrowLeft) {
+            anim_state.target_roll = -MAX_ROLL;
+        } else if keyboard.pressed(KeyCode::ArrowRight) {
+            anim_state.target_roll = MAX_ROLL;
+        } else {
+            anim_state.target_roll = 0.0;
+        }
+
+        // Smoothly interpolate current roll to target
+        let delta = time.elapsed().as_secs_f32();
+        let speed = if anim_state.target_roll == 0.0 { RETURN_SPEED } else { ROLL_SPEED };
+        anim_state.current_roll = lerp(
+            anim_state.current_roll,
+            anim_state.target_roll,
+            delta * speed
+        );
+
+        // Apply roll rotation while preserving initial rotation
+        if let Some(initial_rot) = anim_state.initial_rotation {
+            transform.rotation = initial_rot * Quat::from_rotation_z(anim_state.current_roll);
+        }
     }
 }
 

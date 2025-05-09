@@ -1,15 +1,32 @@
 use bevy::prelude::*;
+use crate::rendering::bullet::spawn_bullet;
 
 pub struct InputPlugin;
 
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, plane_movement_system);
+        app.add_systems(Update, (plane_movement_system, handle_shooting));
     }
 }
 
 #[derive(Component)]
 pub struct ControllablePlane;
+
+fn handle_shooting(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    query: Query<&Transform, With<ControllablePlane>>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    if keyboard.just_pressed(KeyCode::Space) {
+        if let Ok(plane_transform) = query.single() {
+            // Spawn bullet slightly below the plane
+            let bullet_pos = plane_transform.translation + Vec3::new(0.0, -1.0, 0.0);
+            spawn_bullet(&mut commands, &mut meshes, &mut materials, bullet_pos);
+        }
+    }
+}
 
 fn plane_movement_system(
     keyboard: Res<ButtonInput<KeyCode>>,

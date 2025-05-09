@@ -7,6 +7,7 @@ use rendering::CameraPlugin;
 use rendering::DebugRenderPlugin;
 use rendering::InputPlugin;
 use rendering::AnimationPlugin;
+use rendering::BulletPlugin;
 use rendering::input::ControllablePlane;
 
 fn main() {
@@ -18,6 +19,7 @@ fn main() {
         .add_plugins(CameraPlugin)
         .add_plugins(InputPlugin)
         .add_plugins(AnimationPlugin)
+        .add_plugins(BulletPlugin)
         .add_systems(Startup, setup_scene)
         .add_systems(Startup, spawn_gltf)
         .run();
@@ -52,9 +54,9 @@ fn spawn_gltf(mut commands: Commands, asset_server: Res<AssetServer>) {
     let model_scene = asset_server.load("models/plane.gltf#Scene0");
     commands.spawn((
         SceneRoot::from(model_scene),
-        Transform::from_xyz(0.0, 2.0, -5.0) // Changed to negative Z to be visible in camera view
-            .with_scale(Vec3::new(2.0, 2.0, 2.0))
-            .with_rotation(Quat::IDENTITY),
+        Transform::from_xyz(0.0, 2.0, -5.0)
+            .with_scale(Vec3::new(3.3, 3.3, 3.3))
+            .with_rotation(Quat::from_rotation_y(-std::f32::consts::PI)),
         ControllablePlane,
     ));
 }
