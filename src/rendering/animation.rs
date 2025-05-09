@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::rendering::input::ControllablePlane;
+use crate::rendering::plane::Plane;
 
 pub struct AnimationPlugin;
 
@@ -18,7 +18,7 @@ struct PlaneAnimationState {
 }
 
 fn plane_swing_animation(
-    mut query: Query<&mut Transform, With<ControllablePlane>>,
+    mut query: Query<&mut Transform, With<Plane>>,
     keyboard: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     mut anim_state: ResMut<PlaneAnimationState>,

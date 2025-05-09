@@ -8,7 +8,9 @@ use rendering::DebugRenderPlugin;
 use rendering::InputPlugin;
 use rendering::AnimationPlugin;
 use rendering::BulletPlugin;
-use rendering::input::ControllablePlane;
+use rendering::PlanePlugin;
+use rendering::EnemyPlugin;
+use rendering::SplinePlugin;
 
 fn main() {
     App::new()
@@ -20,8 +22,10 @@ fn main() {
         .add_plugins(InputPlugin)
         .add_plugins(AnimationPlugin)
         .add_plugins(BulletPlugin)
+        .add_plugins(PlanePlugin)
+        .add_plugins(EnemyPlugin)
+        .add_plugins(SplinePlugin)
         .add_systems(Startup, setup_scene)
-        .add_systems(Startup, spawn_gltf)
         .run();
 }
 
@@ -46,17 +50,5 @@ fn setup_scene(
             ..default()
         },
         Transform::from_translation(light_pos).looking_at(Vec3::ZERO, Vec3::Z),
-    ));
-}
-
-fn spawn_gltf(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // Load and spawn the GLTF model - positioned at bottom center
-    let model_scene = asset_server.load("models/plane.gltf#Scene0");
-    commands.spawn((
-        SceneRoot::from(model_scene),
-        Transform::from_xyz(0.0, 2.0, -5.0)
-            .with_scale(Vec3::new(3.3, 3.3, 3.3))
-            .with_rotation(Quat::from_rotation_y(-std::f32::consts::PI)),
-        ControllablePlane,
     ));
 }

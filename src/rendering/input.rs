@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use crate::rendering::bullet::spawn_bullet;
+use crate::rendering::plane::Plane;
 
 pub struct InputPlugin;
 
@@ -9,12 +10,9 @@ impl Plugin for InputPlugin {
     }
 }
 
-#[derive(Component)]
-pub struct ControllablePlane;
-
 fn handle_shooting(
     keyboard: Res<ButtonInput<KeyCode>>,
-    query: Query<&Transform, With<ControllablePlane>>,
+    query: Query<&Transform, With<Plane>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -30,12 +28,10 @@ fn handle_shooting(
 
 fn plane_movement_system(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut query: Query<&mut Transform, With<ControllablePlane>>,
+    mut query: Query<(&Plane, &mut Transform)>,
     time: Res<Time>,
 ) {
-    let movement_speed = 20.0;
-    
-    for mut transform in query.iter_mut() {
+    for (plane, mut transform) in query.iter_mut() {
         let mut movement = Vec3::ZERO;
 
         // Forward/Backward movement
@@ -55,7 +51,7 @@ fn plane_movement_system(
         }
 
         if movement != Vec3::ZERO {
-            transform.translation += movement.normalize() * movement_speed * time.delta_secs();
+            transform.translation += movement.normalize() * plane.speed * time.delta().as_secs_f32();
         }
     }
 }
