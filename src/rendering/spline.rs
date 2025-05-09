@@ -1,25 +1,23 @@
 use bevy::prelude::*;
 use rand::{Rng, thread_rng};
 use bevy::math::primitives::Cuboid;
-
-// Assuming Mesh3d and MeshMaterial3d are correctly defined in your project
-// or provided by a plugin you are using.
+use super::enemy::spawn_enemy_with_spline;
 
 pub struct SplinePlugin;
 
 #[derive(Component)]
-struct Spline {
-    control_points: Vec<Vec3>,
+pub struct Spline {
+pub control_points: Vec<Vec3>,
 }
 
 impl Plugin for SplinePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, spawn_spline)
-           .add_systems(Startup, draw_spline.after(spawn_spline));
+        .add_systems(Startup, draw_spline.after(spawn_spline));
     }
 }
 
-fn spawn_spline(mut commands: Commands) {
+fn spawn_spline(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut rng = thread_rng(); 
 
     // Z coordinates for screen fit (remains the same)
@@ -86,18 +84,26 @@ fn spawn_spline(mut commands: Commands) {
         p2_z 
     ));
 
-    points.push(Vec3::new(
-        end_x,
-        0.1,
-        z_bottom_screen // P3: End point
-    ));
+    // points.push(Vec3::new(
+    //     end_x,
+    //     0.1,
+    //     z_bottom_screen // P3: End point
+    // ));
 
-    commands.spawn(Spline {
-        control_points: points,
-    });
+    // commands.spawn(Spline {
+    //     control_points: points,
+    // });
+
+    // Spawn spline and enemy
+    let spline_entity = commands.spawn(
+        Spline { control_points: points }
+    ).id();
+    
+    spawn_enemy_with_spline(&mut commands, &asset_server, spline_entity);
+
 }
 
-fn bezier_point(control_points: &[Vec3], t: f32) -> Vec3 {
+pub fn bezier_point(control_points: &[Vec3], t: f32) -> Vec3 {
     let n = control_points.len() - 1;
     if n == 0 { 
         return control_points.first().copied().unwrap_or(Vec3::ZERO);
