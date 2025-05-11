@@ -1,24 +1,17 @@
 use bevy::prelude::*;
-use rand::{Rng, thread_rng};
-use bevy::math::primitives::Cuboid;
-use super::enemy::spawn_enemy_with_spline;
-
-pub struct SplinePlugin;
+use rand::Rng;
 
 #[derive(Component)]
 pub struct Spline {
 pub control_points: Vec<Vec3>,
 }
 
-impl Plugin for SplinePlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_spline)
-        .add_systems(Startup, draw_spline.after(spawn_spline));
-    }
-}
-
-fn spawn_spline(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let mut rng = thread_rng(); 
+pub fn spawn_spline(
+    commands: &mut Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) -> Entity {
+    let mut rng = rand::rng();
 
     // Z coordinates for screen fit (remains the same)
     let z_top_screen = -5.0; 
@@ -34,8 +27,8 @@ fn spawn_spline(mut commands: Commands, asset_server: Res<AssetServer>) {
     const SPAWN_AREA_X_MAX: f32 = 20.0;
 
     // --- Dynamic Start (P0) and End (P3) X-coordinates ---
-    let start_x = rng.gen_range(SPAWN_AREA_X_MIN..SPAWN_AREA_X_MAX); 
-    let end_x = rng.gen_range(SPAWN_AREA_X_MIN..SPAWN_AREA_X_MAX);
+    let start_x = rng.random_range(SPAWN_AREA_X_MIN..SPAWN_AREA_X_MAX); 
+    let end_x = rng.random_range(SPAWN_AREA_X_MIN..SPAWN_AREA_X_MAX);
 
     let mut points = vec![
         Vec3::new(start_x, 0.1, z_top_screen) // P0: Start point
@@ -43,8 +36,8 @@ fn spawn_spline(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     // --- Stretched Curves with Control Points (P1, P2) Clamped to Visible Area ---
     // Increased horizontal pull strength for wider curves.
-    let pull_strength1 = rng.gen_range(20.0..30.0); // Increased strength
-    let pull_strength2 = rng.gen_range(20.0..30.0); // Increased strength
+    let pull_strength1 = rng.random_range(20.0..30.0); // Increased strength
+    let pull_strength2 = rng.random_range(20.0..30.0); // Increased strength
 
     let raw_control1_x: f32;
     let raw_control2_x: f32;
@@ -52,7 +45,7 @@ fn spawn_spline(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Randomly decide the direction of the first pull (left or right for P1)
     // P2 will pull in the opposite direction relative to its anchor (end_x)
     // to maintain the S-shape.
-    if rng.gen_bool(0.5) { 
+    if rng.random_bool(0.5) { 
         // P1 pulls left from start_x
         raw_control1_x = start_x - pull_strength1;
         // P2 pulls right from end_x
@@ -84,23 +77,95 @@ fn spawn_spline(mut commands: Commands, asset_server: Res<AssetServer>) {
         p2_z 
     ));
 
-    // points.push(Vec3::new(
-    //     end_x,
-    //     0.1,
-    //     z_bottom_screen // P3: End point
-    // ));
-
-    // commands.spawn(Spline {
-    //     control_points: points,
-    // });
-
     // Spawn spline and enemy
     let spline_entity = commands.spawn(
-        Spline { control_points: points }
+        Spline { control_points: points.clone() }
     ).id();
-    
-    spawn_enemy_with_spline(&mut commands, &asset_server, spline_entity);
 
+    // Draw the control points
+    for (idx, point_translation) in points.iter().enumerate() {
+        println!("Control Point {}: {:?}", idx, point_translation);
+        let cube_size = 2.0; 
+        let cube_mesh_handle = meshes.add(Cuboid::new(cube_size, cube_size, cube_size));
+        
+        let point_color_enum = match idx {
+            0 => Color::srgb(0.0, 1.0, 0.0), // Green for P0 (Start)
+            1 => Color::srgb(1.0, 0.5, 0.0), // Orange for P1
+            2 => Color::srgb(1.0, 0.0, 1.0), // Magenta for P2
+            3 => Color::srgb(0.0, 1.0, 1.0), // Cyan for P3 (End)
+            _ => Color::srgb(1.0, 0.0, 0.0), // Red fallback
+        };
+
+        let point_srgba = point_color_enum.to_srgba(); 
+        let emissive_srgb = Color::srgb( 
+            point_srgba.red * 0.5,
+            point_srgba.green * 0.5,
+            point_srgba.blue * 0.5
+        );
+        let emissive_linear_rgba = emissive_srgb.to_linear(); 
+
+        let material_handle = materials.add(StandardMaterial {
+            base_color: point_color_enum, 
+            emissive: emissive_linear_rgba, 
+            ..default()
+        });
+
+        let control_poit_entity = commands.spawn((
+            Mesh3d(cube_mesh_handle), // Assuming Mesh3d is your component
+            MeshMaterial3d(material_handle), // Assuming MeshMaterial3d is your component
+            Transform::from_translation(*point_translation),
+        )).id();
+        commands.entity(spline_entity).add_child(control_poit_entity);
+    }
+
+    const SEGMENTS: usize = 50;
+    let mut curve_points = Vec::with_capacity(SEGMENTS + 1);
+    for i in 0..=SEGMENTS {
+        let t = i as f32 / SEGMENTS as f32;
+        curve_points.push(bezier_point(&points, t));
+    }
+    
+    for window in curve_points.windows(2) {
+        let start_point = window[0];
+        let end_point = window[1];
+        
+        let length = (end_point - start_point).length();
+        if length < 0.001 { continue; } 
+
+        let direction = (end_point - start_point).normalize_or_zero();
+        
+        let line_thickness = 0.3; 
+        let line_mesh_handle = meshes.add(Cuboid::new(line_thickness, line_thickness, length));
+        let rotation = Quat::from_rotation_arc(Vec3::Z, direction); 
+        let midpoint = start_point + direction * length * 0.5;
+        
+        let near_control_point_threshold: f32 = 10.0; 
+        let is_near_control_point = points.iter().any(|cp| {
+            (midpoint - *cp).length_squared() < near_control_point_threshold.powi(2)
+        });
+        
+        let segment_color_enum = if is_near_control_point { 
+            Color::srgb(1.0, 1.0, 0.0) // Yellow
+        } else {
+            Color::srgb(0.1, 0.1, 0.1) // Darker Black/Grey
+        };
+        
+        let segment_material_handle = materials.add(StandardMaterial {
+            base_color: segment_color_enum, 
+            ..default()
+        });
+
+        let line_entity = commands.spawn((
+            Mesh3d(line_mesh_handle), // Assuming Mesh3d is your component
+            MeshMaterial3d(segment_material_handle), // Assuming MeshMaterial3d is your component
+            Transform::from_translation(midpoint)
+                .with_rotation(rotation),
+        )).id();
+
+        commands.entity(spline_entity).add_child(line_entity);
+    }
+
+    return spline_entity
 }
 
 pub fn bezier_point(control_points: &[Vec3], t: f32) -> Vec3 {
@@ -130,94 +195,4 @@ fn binomial_coefficient(n: usize, k: usize) -> usize {
         result = result * (n - i) / (i + 1);
     }
     result
-}
-
-fn draw_spline(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    splines: Query<&Spline>, // Query for the Spline component data
-) {
-    // This function will now only run once at startup.
-    // It finds the Spline component created by spawn_spline and draws its visuals.
-    for spline in splines.iter() {
-        // Draw the control points
-        for (idx, point_translation) in spline.control_points.iter().enumerate() {
-            let cube_size = 2.0; 
-            let cube_mesh_handle = meshes.add(Cuboid::new(cube_size, cube_size, cube_size));
-            
-            let point_color_enum = match idx {
-                0 => Color::srgb(0.0, 1.0, 0.0), // Green for P0 (Start)
-                1 => Color::srgb(1.0, 0.5, 0.0), // Orange for P1
-                2 => Color::srgb(1.0, 0.0, 1.0), // Magenta for P2
-                3 => Color::srgb(0.0, 1.0, 1.0), // Cyan for P3 (End)
-                _ => Color::srgb(1.0, 0.0, 0.0), // Red fallback
-            };
-
-            let point_srgba = point_color_enum.to_srgba(); 
-            let emissive_srgb = Color::srgb( 
-                point_srgba.red * 0.5,
-                point_srgba.green * 0.5,
-                point_srgba.blue * 0.5
-            );
-            let emissive_linear_rgba = emissive_srgb.to_linear(); 
-
-            let material_handle = materials.add(StandardMaterial {
-                base_color: point_color_enum, 
-                emissive: emissive_linear_rgba, 
-                ..default()
-            });
-
-            commands.spawn((
-                Mesh3d(cube_mesh_handle), // Assuming Mesh3d is your component
-                MeshMaterial3d(material_handle), // Assuming MeshMaterial3d is your component
-                Transform::from_translation(*point_translation),
-            ));
-        }
-
-        const SEGMENTS: usize = 50;
-        let mut curve_points = Vec::with_capacity(SEGMENTS + 1);
-        for i in 0..=SEGMENTS {
-            let t = i as f32 / SEGMENTS as f32;
-            curve_points.push(bezier_point(&spline.control_points, t));
-        }
-        
-        for window in curve_points.windows(2) {
-            let start_point = window[0];
-            let end_point = window[1];
-            
-            let length = (end_point - start_point).length();
-            if length < 0.001 { continue; } 
-
-            let direction = (end_point - start_point).normalize_or_zero();
-            
-            let line_thickness = 0.3; 
-            let line_mesh_handle = meshes.add(Cuboid::new(line_thickness, line_thickness, length));
-            let rotation = Quat::from_rotation_arc(Vec3::Z, direction); 
-            let midpoint = start_point + direction * length * 0.5;
-            
-            let near_control_point_threshold: f32 = 10.0; 
-            let is_near_control_point = spline.control_points.iter().any(|cp| {
-                (midpoint - *cp).length_squared() < near_control_point_threshold.powi(2)
-            });
-            
-            let segment_color_enum = if is_near_control_point { 
-                Color::srgb(1.0, 1.0, 0.0) // Yellow
-            } else {
-                Color::srgb(0.1, 0.1, 0.1) // Darker Black/Grey
-            };
-            
-            let segment_material_handle = materials.add(StandardMaterial {
-                base_color: segment_color_enum, 
-                ..default()
-            });
-
-            commands.spawn((
-                Mesh3d(line_mesh_handle), // Assuming Mesh3d is your component
-                MeshMaterial3d(segment_material_handle), // Assuming MeshMaterial3d is your component
-                Transform::from_translation(midpoint)
-                    .with_rotation(rotation),
-            ));
-        }
-    }
 }
