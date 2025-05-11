@@ -5,7 +5,7 @@ pub struct DebugRenderPlugin;
 impl Plugin for DebugRenderPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, spawn_coordinate_system)
-        .add_systems(Startup, spawn_grid_planes);
+            .add_systems(Startup, spawn_grid_planes);
     }
 }
 
