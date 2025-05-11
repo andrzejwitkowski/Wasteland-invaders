@@ -9,8 +9,7 @@ use rendering::InputPlugin;
 use rendering::AnimationPlugin;
 use rendering::BulletPlugin;
 use rendering::PlanePlugin;
-use rendering::EnemyPlugin;
-use rendering::SplinePlugin;
+use rendering::EnemySplineFollowerPlugin;
 
 fn main() {
     App::new()
@@ -23,8 +22,7 @@ fn main() {
         .add_plugins(AnimationPlugin)
         .add_plugins(BulletPlugin)
         .add_plugins(PlanePlugin)
-        .add_plugins(EnemyPlugin)
-        .add_plugins(SplinePlugin)
+        .add_plugins(EnemySplineFollowerPlugin)
         .add_systems(Startup, setup_scene)
         .run();
 }

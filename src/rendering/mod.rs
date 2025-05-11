@@ -6,6 +6,7 @@ pub mod bullet;
 pub mod plane;
 pub mod enemy;
 pub mod spline;
+pub mod enemy_spline_follower;
 
 pub use debug::DebugRenderPlugin;
 pub use camera::CameraPlugin;
@@ -13,5 +14,4 @@ pub use input::InputPlugin;
 pub use animation::AnimationPlugin;
 pub use bullet::BulletPlugin;
 pub use plane::PlanePlugin;
-pub use enemy::EnemyPlugin;
-pub use spline::SplinePlugin;
+pub use enemy_spline_follower::EnemySplineFollowerPlugin;
