@@ -13,6 +13,7 @@ bevy-inspector-egui = "0.31.0"
 bevy_editor_pls = "0.10.0"
 bevy_gltf = "0.16.0"
 rand = "0.9.0"
+noise = "0.9.0"
 
 [[bin]]
 name = "wasteland-invaders"

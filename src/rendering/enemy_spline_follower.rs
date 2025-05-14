@@ -67,8 +67,6 @@ fn follow_spline_path(
                 // Move along spline using delta_seconds
                 let progress_delta = speed * time.delta_secs() * 0.01; 
                 follower.spline_progress += progress_delta;
-
-                println!("Follower progress: {}", follower.spline_progress);
                 
                 if follower.spline_progress >= 1.0 {
                     // Mark enemy for cleanup when it reaches the end by inserting the Cleanup component.
