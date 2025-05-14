@@ -44,6 +44,7 @@ fn setup_scene(
     commands.spawn((
         DirectionalLight {
             color: Color::WHITE,
+            shadows_enabled: true,
             illuminance: 15000.0,
             ..default()
         },
