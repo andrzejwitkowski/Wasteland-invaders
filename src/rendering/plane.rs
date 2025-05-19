@@ -21,7 +21,7 @@ fn spawn_plane(
     let model_scene = asset_server.load("models/plane.gltf#Scene0");
     commands.spawn((
         SceneRoot::from(model_scene),
-        Transform::from_xyz(0.0, 2.0, -5.0)
+        Transform::from_xyz(0.0, 6.0, -5.0)
             .with_scale(Vec3::new(3.3, 3.3, 3.3))
             .with_rotation(Quat::from_rotation_y(-std::f32::consts::PI)),
         Plane { speed: 20.0 },
