@@ -1,15 +1,20 @@
 mod rendering;
 
 use bevy::prelude::*;
+use rendering::ComplexWaterPlugin;
 use rendering::WaterPlugin;
 
 use crate::rendering::water::CompleteWaterMaterial;
 use crate::rendering::water::WaterMaterial;
 
+use crate::rendering::complex_water::CompleteComplexWaterMaterial;
+use crate::rendering::complex_water::ComplexWaterMaterial;
+
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(WaterPlugin)
+        .add_plugins(ComplexWaterPlugin)
         .add_systems(Startup, setup)
         .run();
 }
@@ -17,8 +22,7 @@ fn main() {
 fn setup(                                       
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<CompleteWaterMaterial>>, // Changed this line
-    asset_server: Res<AssetServer>,
+    mut materials: ResMut<Assets<CompleteComplexWaterMaterial>>, // Changed this line
 ) {
     let water_mesh_handle = meshes.add(
         Mesh::from(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(50))
@@ -26,15 +30,32 @@ fn setup(
             .unwrap()
     );
     
-    // Use CompleteWaterMaterial (ExtendedMaterial)
-    let water_material = materials.add(CompleteWaterMaterial {
+    // // Use CompleteWaterMaterial (ExtendedMaterial)
+    // let water_material = materials.add(CompleteWaterMaterial {
+    //     base: StandardMaterial {
+    //         base_color: Color::srgba(0.1, 0.3, 0.6, 0.8),
+    //         alpha_mode: AlphaMode::Blend,
+    //         ..default()
+    //     },
+    //     extension: WaterMaterial {
+    //         data: Vec4::new(0.1, 0.3, 0.6, 0.0),
+    //     },
+    // });
+
+    // Add the water material to the assets.
+    let water_material = materials.add(CompleteComplexWaterMaterial {
+        // --- Set Standard PBR properties on the `base` material ---
         base: StandardMaterial {
-            base_color: Color::srgba(0.1, 0.3, 0.6, 0.8),
+            base_color: Color::srgb(0.1, 0.4, 0.7),
             alpha_mode: AlphaMode::Blend,
+            metallic: 0.0,
+            reflectance: 0.5,
+            perceptual_roughness: 0.1,
             ..default()
         },
-        extension: WaterMaterial {
-            data: Vec4::new(0.1, 0.3, 0.6, 0.0),
+        // --- Set your custom water properties on the `extension` ---
+        extension: ComplexWaterMaterial {
+            ..default()
         },
     });
     

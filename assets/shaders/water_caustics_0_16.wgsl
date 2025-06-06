@@ -1,145 +1,129 @@
-#import bevy_pbr::{
-    mesh_functions,
-    mesh_view_bindings::{view, globals},
-    forward_io::{FragmentOutput},
-    mesh_bindings::mesh,
-}
+// Correct imports for the helper functions and bindings
+#import bevy_pbr::mesh_view_bindings::view
+#import bevy_pbr::mesh_functions
+#import bevy_pbr::view_transformations::position_world_to_clip
+#import bevy_pbr::pbr_fragment::pbr_input_from_standard_material
+#import bevy_pbr::pbr_functions::apply_pbr_lighting
 
-// Single material struct that matches your Rust WaterMaterial
+// This struct must exactly match the `WaterMaterial` struct in your Rust code.
 struct WaterMaterial {
-    // Wave parameters
-    wave_amplitude: f32,
-    wave_frequency: f32,
-    wave_speed: f32,
-    wave_steepness: f32,
+    // .x = wave_amplitude, .y = wave_frequency, .z = wave_speed, .w = wave_steepness
+    wave_params: vec4<f32>,
     
-    // Surface parameters  
-    roughness: f32,
-    metallic: f32,
-    reflectance: f32,
-    transparency: f32,
-    
-    // Foam parameters
-    foam_intensity: f32,
-    foam_cutoff: f32,
-    foam_scale: f32,
-    foam_speed: f32,
-    
-    // Caustic parameters
-    caustic_intensity: f32,
-    caustic_scale: f32,
-    caustic_speed: f32,
-    caustic_depth_falloff: f32,
-    
-    // Water color
-    water_color: vec4<f32>,
-    
-    // Time (updated each frame)
-    time: f32,
-    _padding1: f32,
-    _padding2: f32,
-    _padding3: f32,
+    // .x = foam_intensity, .y = foam_cutoff, .z = transparency, .w = time
+    misc_params: vec4<f32>,
 }
 
-@group(2) @binding(0) var<uniform> material: WaterMaterial;
+// Bind the material data to a high binding number to avoid conflicts.
+// The bindings (100, 101) must match the #[uniform(...)] attributes in Rust.
+@group(2) @binding(100) var<uniform> wave_params_uniform: vec4<f32>;
+@group(2) @binding(101) var<uniform> misc_params_uniform: vec4<f32>;
 
-// Textures (if you want them later)
-// @group(2) @binding(1) var normal_map: texture_2d<f32>;
-// @group(2) @binding(2) var normal_map_sampler: sampler;
-
-// Custom vertex output with our water data
-struct WaterVertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) world_position: vec4<f32>,
-    @location(1) world_normal: vec3<f32>,
-    @location(2) uv: vec2<f32>,
-    @location(3) water_data: vec4<f32>,  // Our custom data
+// Create a single material struct for easier access in functions.
+fn get_material() -> WaterMaterial {
+    var material: WaterMaterial;
+    material.wave_params = wave_params_uniform;
+    material.misc_params = misc_params_uniform;
+    return material;
 }
+
 
 // Wave displacement function
-fn get_wave_displacement(world_pos: vec2<f32>, time: f32) -> vec3<f32> {
-    let amplitude = material.wave_amplitude;
-    let frequency = material.wave_frequency;
-    let speed = material.wave_speed;
+fn get_wave(pos: vec2<f32>, time: f32) -> vec4<f32> {
+    let material = get_material();
+    var p = vec3(pos.x, 0.0, pos.y);
+
+    let wave_count = 2;
+    let directions = array<vec2<f32>, 2>(vec2<f32>(1.0, 0.5), vec2<f32>(-0.5, 0.8));
     
-    // Multiple wave directions
-    let wave1 = vec2<f32>(1.0, 0.0);
-    let wave2 = vec2<f32>(-0.7, 0.7);
+    let wave_amplitude = material.wave_params.x;
+    let wave_frequency = material.wave_params.y;
+    let wave_speed = material.wave_params.z;
+    let wave_steepness = material.wave_params.w;
+
+    for (var i = 0; i < wave_count; i = i + 1) {
+        let dir = normalize(directions[i]);
+        let k = wave_frequency * (1.0 + f32(i) * 0.5);
+        let c = wave_speed * (1.0 - f32(i) * 0.2);
+        let a = wave_amplitude * (1.0 - f32(i) * 0.6);
+        let s = wave_steepness;
+        
+        let f = k * (dot(dir, pos) - c * time);
+        
+        p.x += s * a * dir.x * cos(f);
+        p.z += s * a * dir.y * cos(f);
+        p.y += a * sin(f);
+    }
     
-    // Calculate waves
-    let phase1 = dot(wave1, world_pos) * frequency + time * speed;
-    let phase2 = dot(wave2, world_pos) * frequency * 0.8 + time * speed * 1.2;
-    
-    let height = sin(phase1) * amplitude + sin(phase2) * amplitude * 0.5;
-    
-    // Calculate normals (simplified)
-    let dx = cos(phase1) * amplitude * frequency;
-    let dz = cos(phase2) * amplitude * frequency * 0.5;
-    
-    return vec3<f32>(dx, height, dz);
+    return vec4(p, 0.0);
 }
 
+
 @vertex
-fn vertex(@location(0) position: vec3<f32>, @location(1) normal: vec3<f32>, @location(2) uv: vec2<f32>) -> WaterVertexOutput {
-    var out: WaterVertexOutput;
+fn vertex(vertex: Vertex) -> VertexOutput {
+    var out: VertexOutput;
+    let material = get_material();
+
+    let world_from_local = mesh_functions::get_world_from_local(vertex.instance_index);
+    let initial_world_pos = mesh_functions::mesh_position_local_to_world(world_from_local, vec4(vertex.position, 1.0));
     
-    // Get world position
-    let world_position = mesh_functions::mesh_position_local_to_world(
-        mesh_functions::get_world_from_local(0u), 
-        vec4<f32>(position, 1.0)
-    );
+    let time = material.misc_params.w;
+    let wave = get_wave(initial_world_pos.xz, time);
+    let displaced_world_pos = vec4(wave.xyz, 1.0);
     
-    // Apply wave displacement
-    let wave_data = get_wave_displacement(world_position.xz, material.time);
-    let displaced_world_pos = vec4<f32>(
-        world_position.x + wave_data.x * material.wave_steepness,
-        world_position.y + wave_data.y,
-        world_position.z + wave_data.z * material.wave_steepness,
-        1.0
-    );
-    
-    out.position = view.clip_from_world * displaced_world_pos;
+    out.position = position_world_to_clip(displaced_world_pos.xyz);
     out.world_position = displaced_world_pos;
-    out.world_normal = mesh_functions::mesh_normal_local_to_world(normal, 0u);
-    out.uv = uv;
-    
-    // Pack data for fragment shader
-    let foam_factor = clamp(wave_data.y / material.wave_amplitude, 0.0, 1.0);
-    out.water_data = vec4<f32>(
-        wave_data.y,     // wave height
-        foam_factor,     // foam factor
-        1.0,            // depth factor (placeholder)
-        length(wave_data.xz) // wave velocity
-    );
-    
+    out.world_normal = mesh_functions::mesh_normal_local_to_world(vertex.normal, vertex.instance_index);
+    out.uv = vertex.uv;
+    out.instance_index = vertex.instance_index;
+
+    // Pack the foam factor into the .w component of world_position
+    let foam_cutoff = material.misc_params.y;
+    let wave_amplitude = material.wave_params.x;
+    let foam_factor = smoothstep(foam_cutoff, 1.0, wave.y / wave_amplitude);
+    out.world_position.w = foam_factor;
+
+    // Guard optional attributes
+    #ifdef VERTEX_UVS_B
+        out.uv_b = vertex.uv_b;
+    #endif
+    #ifdef VERTEX_TANGENTS
+        out.world_tangent = mesh_functions::mesh_tangent_local_to_world(world_from_local, vertex.tangent, vertex.instance_index);
+    #endif
+    #ifdef VERTEX_COLORS
+        out.color = vertex.color;
+    #endif
+
     return out;
 }
 
 @fragment
-fn fragment(in: WaterVertexOutput) -> FragmentOutput {
+fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
+    var pbr_input = pbr_input_from_standard_material(in, is_front);
+    let material = get_material();
+
+    // Unpack foam data from the world_position.w component.
+    let foam_factor = in.world_position.w;
+    let foam_intensity = material.misc_params.x;
+    let foam_color = vec4(1.0, 1.0, 0.95, 1.0);
+    
+    // Mix the foam color over the base water color that came from the StandardMaterial.
+    pbr_input.material.base_color = mix(
+        pbr_input.material.base_color,
+        foam_color,
+        foam_factor * foam_intensity
+    );
+
+    // Calculate fresnel for transparency using our custom transparency value
+    let transparency = material.misc_params.z;
+    let fresnel = pow(1.0 - max(dot(pbr_input.N, pbr_input.V), 0.0), 3.0);
+    pbr_input.material.base_color.a = mix(transparency, 1.0, fresnel);
+    
+    // Let Bevy's PBR system apply lighting to our modified material
+    let final_color = apply_pbr_lighting(pbr_input);
+    
     var out: FragmentOutput;
-    
-    // Unpack data
-    let wave_height = in.water_data.r;
-    let foam_factor = in.water_data.g;
-    let depth_factor = in.water_data.b;
-    let wave_velocity = in.water_data.a;
-    
-    // Calculate view direction and fresnel
-    let view_dir = normalize(view.world_position.xyz - in.world_position.xyz);
-    let fresnel = pow(1.0 - max(dot(in.world_normal, view_dir), 0.0), 3.0);
-    
-    // Base water color
-    var final_color = material.water_color.rgb;
-    
-    // Simple foam effect
-    let foam_color = vec3<f32>(1.0, 1.0, 0.95);
-    final_color = mix(final_color, foam_color, foam_factor * material.foam_intensity);
-    
-    // Apply transparency with fresnel
-    let alpha = mix(material.transparency, 0.95, fresnel);
-    
-    out.color = vec4<f32>(final_color, alpha);
+    out.color = final_color;
     
     return out;
 }
