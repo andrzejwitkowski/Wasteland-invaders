@@ -20,6 +20,7 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<CompleteComplexWaterMaterial>>, // Changed this line
+    mut standard_materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let water_mesh_handle = meshes.add(
         Mesh::from(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(200))
@@ -34,15 +35,32 @@ fn setup(
             base_color: Color::srgb(0.1, 0.4, 0.7),
             alpha_mode: AlphaMode::Blend,
             metallic: 0.0,
-            reflectance: 0.5,
-            perceptual_roughness: 0.1,
+            reflectance: 0.8, // Increased for better Fresnel effect
+            perceptual_roughness: 0.05, // Very smooth for reflections
             ..default()
         },
         // --- Set your custom water properties on the `extension` ---
+        // Calm water: amplitude=0.3, frequency=1.0, speed=1.0, steepness=0.2
+        // Moderate waves: amplitude=0.8, frequency=1.5, speed=1.5, steepness=0.5
+        // Rough seas: amplitude=1.5, frequency=2.0, speed=2.0, steepness=0.8
         extension: ComplexWaterMaterial {
-            ..default()
+            wave_params: Vec4::new(0.8, 1.1, 1.1, 0.4),
+            misc_params: Vec4::new(1.0, 0.7, 0.8, 0.0), // Increased transparency
         },
     });
+
+    let floor_mesh = meshes.add(Mesh::from(Plane3d::default().mesh().size(60.0, 60.0)));
+    let floor_material = standard_materials.add(StandardMaterial {
+        base_color: Color::srgb(0.8, 0.7, 0.6), // Sandy color
+        perceptual_roughness: 0.9,
+        ..default()
+    });
+    
+    commands.spawn((
+        Mesh3d(floor_mesh),
+        MeshMaterial3d(floor_material),
+        Transform::from_xyz(0.0, -2.0, 0.0), // Below water surface
+    ));
     
     commands.spawn((
         Mesh3d(water_mesh_handle),
