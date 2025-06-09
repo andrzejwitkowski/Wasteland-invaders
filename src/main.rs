@@ -22,22 +22,10 @@ fn setup(
     mut materials: ResMut<Assets<CompleteComplexWaterMaterial>>, // Changed this line
 ) {
     let water_mesh_handle = meshes.add(
-        Mesh::from(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(50))
+        Mesh::from(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(200))
             .with_generated_tangents()
             .unwrap()
     );
-    
-    // // Use CompleteWaterMaterial (ExtendedMaterial)
-    // let water_material = materials.add(CompleteWaterMaterial {
-    //     base: StandardMaterial {
-    //         base_color: Color::srgba(0.1, 0.3, 0.6, 0.8),
-    //         alpha_mode: AlphaMode::Blend,
-    //         ..default()
-    //     },
-    //     extension: WaterMaterial {
-    //         data: Vec4::new(0.1, 0.3, 0.6, 0.0),
-    //     },
-    // });
 
     // Add the water material to the assets.
     let water_material = materials.add(CompleteComplexWaterMaterial {
@@ -63,9 +51,13 @@ fn setup(
     ));
     
     // Add camera
+    // commands.spawn((
+    //     Camera3d::default(),
+    //     Transform::from_xyz(0.0, 70.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
+    // ));
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0.0, 70.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(-15.0, 55.0, 15.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
     ));
     
     // Add light

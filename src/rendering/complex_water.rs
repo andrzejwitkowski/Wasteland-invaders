@@ -21,7 +21,7 @@ pub struct ComplexWaterMaterial {
 impl Default for ComplexWaterMaterial {
     fn default() -> Self {
         Self {
-            wave_params: Vec4::new(0.3, 0.8, 1.2, 0.4), // amplitude, frequency, speed, steepness
+            wave_params: Vec4::new(0.6, 1.5, 1.5, 0.8), // amplitude, frequency, speed, steepness
             misc_params: Vec4::new(1.0, 0.7, 0.6, 0.0), // foam_intensity, foam_cutoff, transparency, time
         }
     }
