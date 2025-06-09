@@ -4,9 +4,6 @@ use bevy::prelude::*;
 use rendering::ComplexWaterPlugin;
 use rendering::WaterPlugin;
 
-use crate::rendering::water::CompleteWaterMaterial;
-use crate::rendering::water::WaterMaterial;
-
 use crate::rendering::complex_water::CompleteComplexWaterMaterial;
 use crate::rendering::complex_water::ComplexWaterMaterial;
 

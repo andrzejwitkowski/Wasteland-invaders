@@ -13,7 +13,8 @@
 
 // This struct defines our custom material data.
 struct WaterMaterial {
-    data: vec4<f32>,
+    wave_params: vec4<f32>,
+    misc_params: vec4<f32>,
 };
 
 // Bind our custom material data to group 2.
@@ -26,7 +27,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     var displaced_position = vertex.position;
 
     // Displace using `time` from our `water_material` uniform.
-    displaced_position.y += sin(vertex.position.x * 0.2 + water_material.data.w * 2.0) * 0.5;
+    displaced_position.y += sin(vertex.position.x * 0.2 + water_material.misc_params.w * 2.0) * 0.5;
 
     // --- The Corrected Approach ---
     // Use the `mesh_functions` helpers with the correct signatures as defined in the source you provided.
@@ -75,7 +76,7 @@ fn fragment(
     var pbr_input = pbr_input_from_standard_material(in, is_front);
     
     // Set color from our `water_material` uniform, using the .xyz components.
-    pbr_input.material.base_color = vec4<f32>(water_material.data.xyz, pbr_input.material.base_color.a);
+    pbr_input.material.base_color = vec4<f32>(water_material.misc_params.xyz, pbr_input.material.base_color.a);
     
     let final_color = apply_pbr_lighting(pbr_input);
     

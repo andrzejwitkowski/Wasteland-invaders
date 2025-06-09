@@ -14,7 +14,7 @@ pub struct ComplexWaterMaterial {
     pub wave_params: Vec4,
     
     // .x = foam_intensity, .y = foam_cutoff, .z = transparency, .w = time
-    #[uniform(101)]
+    #[uniform(100, visibility(fragment))]
     pub misc_params: Vec4,
 }
 
