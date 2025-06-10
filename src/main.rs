@@ -1,16 +1,16 @@
 mod rendering;
 
 use bevy::prelude::*;
+use bevy_egui::EguiPlugin;
 use rendering::ComplexWaterPlugin;
-use rendering::WaterPlugin;
 
 use crate::rendering::complex_water::CompleteComplexWaterMaterial;
 use crate::rendering::complex_water::ComplexWaterMaterial;
 
-
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugins(EguiPlugin { enable_multipass_for_primary_context: false })
         .add_plugins(ComplexWaterPlugin)
         .add_systems(Startup, setup)
         .run();
@@ -43,9 +43,15 @@ fn setup(
         // Calm water: amplitude=0.3, frequency=1.0, speed=1.0, steepness=0.2
         // Moderate waves: amplitude=0.8, frequency=1.5, speed=1.5, steepness=0.5
         // Rough seas: amplitude=1.5, frequency=2.0, speed=2.0, steepness=0.8
+        // extension: ComplexWaterMaterial {
+        //     wave_params: Vec4::new(0.8, 1.1, 1.1, 0.4),
+        //     misc_params: Vec4::new(1.0, 0.7, 0.8, 0.0), // Increased transparency
+        // },
         extension: ComplexWaterMaterial {
-            wave_params: Vec4::new(0.8, 1.1, 1.1, 0.4),
-            misc_params: Vec4::new(1.0, 0.7, 0.8, 0.0), // Increased transparency
+            // wave_params: [amplitude, frequency, speed, steepness/octaves]
+            wave_params: Vec4::new(0.35, 0.3, 1.8, 6.0),
+            // misc_params: [unused, unused, transparency, time]
+            misc_params: Vec4::new(1.0, 0.7, 0.7, 0.0),
         },
     });
 
