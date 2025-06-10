@@ -1,6 +1,9 @@
 mod rendering;
 
 use bevy::prelude::*;
+use bevy_blendy_cameras::BlendyCamerasPlugin;
+use bevy_blendy_cameras::FlyCameraController;
+use bevy_blendy_cameras::OrbitCameraController;
 use bevy_egui::EguiPlugin;
 use rendering::ComplexWaterPlugin;
 
@@ -11,6 +14,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(EguiPlugin { enable_multipass_for_primary_context: false })
+        .add_plugins(BlendyCamerasPlugin)
         .add_plugins(ComplexWaterPlugin)
         .add_systems(Startup, setup)
         .run();
@@ -77,11 +81,16 @@ fn setup(
     // Add camera
     // commands.spawn((
     //     Camera3d::default(),
-    //     Transform::from_xyz(0.0, 70.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
+    //     Transform::from_xyz(-15.0, 55.0, 15.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
     // ));
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(-15.0, 55.0, 15.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+        Transform::from_translation(Vec3::new(0.0, 1.5, 5.0)),
+        OrbitCameraController::default(),
+        FlyCameraController {
+            is_enabled: false,
+            ..default()
+        },
     ));
     
     // Add light
