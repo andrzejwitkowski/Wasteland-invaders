@@ -7,6 +7,8 @@ use bevy_blendy_cameras::OrbitCameraController;
 use bevy_egui::EguiPlugin;
 use rendering::ComplexWaterPlugin;
 
+use crate::rendering::caustic_floor_material::CausticFloorMaterial;
+use crate::rendering::caustic_floor_material::CompleteCausticFloorMaterial;
 use crate::rendering::complex_water::CompleteComplexWaterMaterial;
 use crate::rendering::complex_water::ComplexWaterMaterial;
 
@@ -23,11 +25,12 @@ fn main() {
 fn setup(                                       
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<CompleteComplexWaterMaterial>>, // Changed this line
+    mut materials: ResMut<Assets<CompleteComplexWaterMaterial>>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
+    mut caustic_materials: ResMut<Assets<CompleteCausticFloorMaterial>>,
 ) {
     let water_mesh_handle = meshes.add(
-        Mesh::from(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(200))
+        Mesh::from(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(500))
             .with_generated_tangents()
             .unwrap()
     );
@@ -59,17 +62,33 @@ fn setup(
         },
     });
 
-    let floor_mesh = meshes.add(Mesh::from(Plane3d::default().mesh().size(60.0, 60.0)));
-    let floor_material = standard_materials.add(StandardMaterial {
-        base_color: Color::srgb(0.8, 0.7, 0.6), // Sandy color
-        perceptual_roughness: 0.9,
-        ..default()
+    let caustic_floor_material = caustic_materials.add(CompleteCausticFloorMaterial {
+        base: StandardMaterial {
+            base_color: Color::srgb(0.8, 0.7, 0.6), // Sandy color
+            perceptual_roughness: 0.8,
+            metallic: 0.0,
+            ..default()
+        },
+        extension: CausticFloorMaterial {
+            caustic_params: Vec4::new(2.0, 3.0, 1.0, 0.2), // intensity, scale, speed, depth_fade
+            water_params: Vec4::new(0.35, 0.3, 1.8, 6.0),  // Match your water parameters
+            misc_params: Vec4::new(0.0, 0.0, 0.0, 0.0),    // water_surface_y will be set by system
+        },
     });
+
+    let floor_mesh = meshes.add(
+        Mesh::from(Plane3d::default().mesh().size(60.0, 60.0).subdivisions(500))
+    );
+    // let floor_material = standard_materials.add(StandardMaterial {
+    //     base_color: Color::srgb(0.8, 0.7, 0.6), // Sandy color
+    //     perceptual_roughness: 0.9,
+    //     ..default()
+    // });
     
     commands.spawn((
         Mesh3d(floor_mesh),
-        MeshMaterial3d(floor_material),
-        Transform::from_xyz(0.0, -2.0, 0.0), // Below water surface
+        MeshMaterial3d(caustic_floor_material),
+        Transform::from_xyz(0.0, -2.0, 0.0),
     ));
     
     commands.spawn((
@@ -78,11 +97,6 @@ fn setup(
         Transform::from_xyz(0.0, 0.0, 0.0),
     ));
     
-    // Add camera
-    // commands.spawn((
-    //     Camera3d::default(),
-    //     Transform::from_xyz(-15.0, 55.0, 15.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
-    // ));
     commands.spawn((
         Camera3d::default(),
         Transform::from_translation(Vec3::new(0.0, 1.5, 5.0)),

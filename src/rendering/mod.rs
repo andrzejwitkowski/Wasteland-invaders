@@ -9,7 +9,8 @@ pub mod spline;
 pub mod enemy_spline_follower;
 pub mod fbm_terrain;
 pub mod water;
-pub mod complex_water; // This is a WIP
+pub mod complex_water;
+pub mod caustic_floor_material;
 
 pub use debug::DebugRenderPlugin;
 pub use camera::CameraPlugin;

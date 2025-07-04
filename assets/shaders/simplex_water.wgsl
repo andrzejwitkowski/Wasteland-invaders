@@ -259,51 +259,94 @@ fn get_noise_foam_factor(world_pos: vec3<f32>, wave_height: f32, time: f32) -> f
     return min(1.0, foam_from_waves + foam_mask);
 }
 
+fn calculate_wave_height(pos: vec2<f32>, time: f32) -> f32 {
+    let wave_params = water_material.wave_params;
+    let amplitude = wave_params.x;
+    let frequency = wave_params.y;
+    let speed = wave_params.z;
+    let steepness = wave_params.w;
+    
+    // Apply steepness to create sharper wave peaks
+    // Higher steepness = more pointed/sharp waves
+    // Lower steepness = more rounded/smooth waves
+    
+    let base_freq = frequency + steepness * 0.5;
+    let wave_sharpness = 1.0 + steepness * 2.0;
+    
+    // Multiple wave layers with steepness applied
+    let wave1 = pow(abs(sin((pos.x * base_freq + time * speed) * 2.0)), wave_sharpness) * 
+                sign(sin((pos.x * base_freq + time * speed) * 2.0)) * amplitude;
+    
+    let wave2 = pow(abs(sin((pos.y * base_freq * 0.8 + time * speed * 0.7) * 2.0)), wave_sharpness) * 
+                sign(sin((pos.y * base_freq * 0.8 + time * speed * 0.7) * 2.0)) * amplitude * 0.7;
+    
+    let wave3 = pow(abs(sin(((pos.x + pos.y) * base_freq * 1.2 + time * speed * 1.1) * 2.0)), wave_sharpness) * 
+                sign(sin(((pos.x + pos.y) * base_freq * 1.2 + time * speed * 1.1) * 2.0)) * amplitude * 0.5;
+    
+    // Add some noise for more organic movement (also affected by steepness)
+    let noise_pos = pos * (0.1 + steepness * 0.05) + time * 0.1;
+    let noise_wave = simplex2d(noise_pos) * amplitude * 0.3;
+    
+    return wave1 + wave2 + wave3 + noise_wave;
+}
+
+
 @fragment
 fn fragment(
     in: VertexOutput,
     @builtin(front_facing) is_front: bool
-    ) -> FragmentOutput {
+) -> FragmentOutput {
     var pbr_input = pbr_input_from_standard_material(in, is_front);
     
     let time = water_material.misc_params.w;
+    let transparency = water_material.misc_params.x;
+    let foam_intensity = water_material.misc_params.y;
+    let foam_cutoff = water_material.misc_params.z;
+    
+    // Calculate wave height for foam and transparency effects
+    let wave_height = calculate_wave_height(in.world_position.xz, time);
+    
+    // Crystal clear water properties
+    let base_color = vec3<f32>(0.0, 0.4, 0.8); // Light blue tint
+    let deep_color = vec3<f32>(0.0, 0.2, 0.6); // Deeper blue for depth
+    
+    // Make water more transparent and less colored
+    let water_transparency = mix(0.95, 0.85, abs(wave_height) * 2.0); // Very transparent
+    let water_color = mix(base_color, deep_color, 0.1); // Very subtle color
+    
+    // Calculate foam
+    let foam_factor = smoothstep(foam_cutoff - 0.1, foam_cutoff + 0.1, abs(wave_height));
+    let foam_color = vec3<f32>(1.0, 1.0, 1.0);
+    
+    // Mix water and foam
+    let final_color = mix(water_color, foam_color, foam_factor * foam_intensity);
+    let final_alpha = mix(water_transparency, 1.0, foam_factor * foam_intensity);
+    
+    // Crystal clear water material properties
+    pbr_input.material.base_color = vec4<f32>(final_color, final_alpha);
+    pbr_input.material.perceptual_roughness = 0.02; // Very smooth/reflective
+    pbr_input.material.metallic = 0.0; // Water is not metallic
+    
+    // Remove the problematic reflectance line
+    // pbr_input.material.reflectance = 0.9; // This line causes the error
+    
+    // Instead, we'll handle reflectance through Fresnel effect
     let view_dir = normalize(view.world_position.xyz - in.world_position.xyz);
-    // Calculate Fresnel effect
     let fresnel_factor = fresnel_water(view_dir, in.world_normal);
     
-    // Add some color variation based on wave height
-    let wave_height = in.world_position.y;
-    let water_depth = max(0.0, wave_height - (-2.0)); // Assuming bottom at y=-2
-    let depth_color = get_water_depth_color(in.world_position.xyz, wave_height);
-
-    // Get noise-based caustics effect
-    let caustics = get_noise_caustics(in.world_position.xyz, time);
+    // Apply Fresnel effect to make water more reflective
+    let reflection_color = vec3<f32>(0.8, 0.9, 1.0);
+    let color_with_fresnel = mix(final_color, reflection_color, fresnel_factor * 0.7);
     
-    // Get noise-based foam
-    let foam = get_noise_foam_factor(in.world_position.xyz, wave_height, time);
-    let foam_color = vec3<f32>(0.9, 0.95, 1.0);
+    // Update the base color with Fresnel effect
+    pbr_input.material.base_color = vec4<f32>(color_with_fresnel, final_alpha);
     
-    // Combine all effects
-    let base_water_color = depth_color + caustics * 0.3;
-    let final_color = mix(base_water_color, foam_color, foam);
-
-    // Apply Fresnel for reflections
-    let reflection_color = vec3<f32>(0.6, 0.8, 1.0);
-    let color_with_fresnel = mix(final_color, reflection_color, fresnel_factor * 0.6);
+    // No emissive for crystal clear water
+    pbr_input.material.emissive = vec4<f32>(0.0, 0.0, 0.0, 0.0);
     
-    pbr_input.material.base_color = vec4<f32>(color_with_fresnel, 1.0);
-
-    // Dynamic transparency based on depth and Fresnel
-    let water_alpha = get_water_alpha(water_depth, fresnel_factor);
-    pbr_input.material.base_color.a = water_alpha;
-    
-    // Adjust material properties
-    pbr_input.material.perceptual_roughness = mix(0.1, 0.05, fresnel_factor);
-    pbr_input.material.metallic = 0.0;
-    
-    let final_pbr_color = apply_pbr_lighting(pbr_input);
+    let final_result = apply_pbr_lighting(pbr_input);
     
     var out: FragmentOutput;
-    out.color = final_pbr_color;
+    out.color = final_result;
     return out;
 }
