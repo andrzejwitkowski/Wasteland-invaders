@@ -32,7 +32,7 @@ impl TerrainGenerator {
     ) -> (Mesh, Vec<TerrainType>) {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
-        let mut normals = Vec::new();
+        // let mut normals = Vec::new();
         let mut uvs = Vec::new();  // Added back UV coordinates
         let mut terrain_types = Vec::new();
  
@@ -51,7 +51,7 @@ impl TerrainGenerator {
                 
                 // Store LOCAL coordinates in the mesh
                 vertices.push([local_x, height, local_z]);
-                normals.push([0.0, 1.0, 0.0]);
+                // normals.push([0.0, 1.0, 0.0]);
                 
                 let u = x as f32 / chunk_size as f32;
                 let v = z as f32 / chunk_size as f32;
@@ -87,9 +87,10 @@ impl TerrainGenerator {
         );
         
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+        // mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);  // Added back UV coordinates
         mesh.insert_indices(bevy::render::mesh::Indices::U32(indices));
+        mesh.compute_smooth_normals();
 
         (mesh, terrain_types)
     }
