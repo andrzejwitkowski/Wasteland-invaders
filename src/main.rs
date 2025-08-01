@@ -1,5 +1,6 @@
 mod rendering;
 mod terrain;
+mod riverbank;
 
 use bevy::prelude::*;
 use bevy_blendy_cameras::BlendyCamerasPlugin;
@@ -13,20 +14,28 @@ use crate::rendering::caustic_floor_material::CausticFloorMaterial;
 use crate::rendering::caustic_floor_material::CompleteCausticFloorMaterial;
 use crate::rendering::complex_water::CompleteComplexWaterMaterial;
 use crate::rendering::complex_water::ComplexWaterMaterial;
+use crate::riverbank::RiverBankPlugin;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        // .add_plugins(EguiPlugin { enable_multipass_for_primary_context: false })
+        .add_plugins(EguiPlugin { enable_multipass_for_primary_context: false })
         // .add_plugins(ComplexWaterPlugin)
         // .add_systems(Startup, setup)
-        .add_systems(Startup, setup_camera_and_light)
+        .add_systems(Startup, (
+            setup_camera_and_light,
+            crate::terrain::systems::setup_terrain_materials,
+        ))
         // .add_systems(Startup, systems)
         .add_plugins(TerrainPlugin {
             auto_generate: true,
             terrain_size: 512,
             chunk_size: 64,
         })
+        .add_plugins((
+            ComplexWaterPlugin,
+            RiverBankPlugin)
+        )
         .add_plugins(BlendyCamerasPlugin)
         .run();
 }

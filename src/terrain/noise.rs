@@ -70,7 +70,7 @@ impl TerrainNoise {
                 }
             }
             h if h > -0.2 => TerrainType::Valley,
-            _ => TerrainType::Water, // Will be used for rivers later
+            _ => TerrainType::Valley,
         }
     }
 

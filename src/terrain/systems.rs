@@ -2,42 +2,44 @@ use bevy::prelude::*;
 use crate::terrain::generation::TerrainGenerator;
 use crate::terrain::resources::*;
 use crate::terrain::noise::TerrainType;
+use crate::riverbank::resources::{GlobalRiverPath, RiverConfig};
 
 pub fn setup_terrain_materials(
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    println!("Setting up terrain materials with natural colors...");
+    
     let terrain_materials = TerrainMaterials {
         mountain_material: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.5, 0.5, 0.6), // Gray-blue for mountains
+            base_color: Color::srgb(0.5, 0.4, 0.3), // Brown/rocky color for mountains
             perceptual_roughness: 0.9,
             metallic: 0.0,
-            ..Default::default()
+            ..default()
         }),
         hill_material: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.4, 0.6, 0.3), // Green for hills
+            base_color: Color::srgb(0.4, 0.6, 0.3), // Green/brown for hills
             perceptual_roughness: 0.8,
             metallic: 0.0,
-            ..Default::default()
+            ..default()
         }),
         plains_material: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.3, 0.7, 0.2), // Bright green for plains
+            base_color: Color::srgb(0.3, 0.7, 0.2), // Green for plains
             perceptual_roughness: 0.7,
             metallic: 0.0,
-            ..Default::default()
+            ..default()
         }),
         valley_material: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.6, 0.5, 0.3), // Brown for valleys
+            base_color: Color::srgb(0.2, 0.5, 0.1), // Darker green for valleys
             perceptual_roughness: 0.6,
             metallic: 0.0,
-            ..Default::default()
+            ..default()
         }),
         water_material: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.0, 0.3, 0.7, 0.8), // Blue water (for future use)
-            perceptual_roughness: 0.0,
+            base_color: Color::srgb(0.6, 0.5, 0.3), // Sandy/muddy color (NOT blue)
+            perceptual_roughness: 0.5,
             metallic: 0.0,
-            alpha_mode: AlphaMode::Blend,
-            ..Default::default()
+            ..default()
         }),
     };
 
@@ -68,6 +70,8 @@ pub fn handle_terrain_generation(
     terrain_materials: Res<TerrainMaterials>,
     config: Res<TerrainConfig>,
     mut generated_events: EventWriter<TerrainGeneratedEvent>,
+    global_river_path: Option<Res<GlobalRiverPath>>,
+    river_config: Option<Res<RiverConfig>>,
 ) {
     for event in events.read() {
         println!("Processing terrain generation event at ({}, {})", event.center_x, event.center_z);
@@ -75,8 +79,7 @@ pub fn handle_terrain_generation(
             event.center_x,
             event.center_z,
             event.radius,
-            config.chunk_size,
-            config.scale,
+            config.chunk_size
         );
 
         let mut generated_chunks = Vec::new();
@@ -87,17 +90,22 @@ pub fn handle_terrain_generation(
                 continue;
             }
 
-            // Generate mesh for this chunk
+            // Generate mesh for this chunk with river carving
             let (mesh, terrain_types) = terrain_generator.generate_chunk_mesh(
                 chunk_x,
                 chunk_z,
                 config.chunk_size,
                 config.scale,
                 config.height_scale,
+                global_river_path.as_deref(), // Convert Option<Res<T>> to Option<&T>
+                river_config.as_deref(),      // Convert Option<Res<T>> to Option<&T>
             );
 
             // Determine material based on dominant terrain type
-            let dominant_type = terrain_generator.get_dominant_terrain_type(&terrain_types);
+            let dominant_type = TerrainType::Mountain; // TEMPORARY
+            //terrain_generator.get_dominant_terrain_type(&terrain_types);
+            
+            // Choose appropriate material based on terrain type
             let material = match dominant_type {
                 TerrainType::Mountain => terrain_materials.mountain_material.clone(),
                 TerrainType::Hill => terrain_materials.hill_material.clone(),
@@ -105,19 +113,16 @@ pub fn handle_terrain_generation(
                 TerrainType::Valley => terrain_materials.valley_material.clone(),
                 TerrainType::Water => terrain_materials.water_material.clone(),
             };
-            // Calculate world position for this chunk
-            let world_x = chunk_x as f32 * config.chunk_size as f32 * config.scale;
-            let world_z = chunk_z as f32 * config.chunk_size as f32 * config.scale;
 
             // Create the terrain chunk entity
             let chunk_entity = commands.spawn((
                 Mesh3d(meshes.add(mesh)),
                 MeshMaterial3d(material),
-                Transform::from_xyz(world_x, 0.0, world_z),
+                Transform::IDENTITY,
                 TerrainChunk {
                     chunk_x,
                     chunk_z,
-                    vertices: Vec::new(), // We could store vertices here if needed
+                    vertices: Vec::new(),
                     terrain_types,
                 },
                 Name::new(format!("TerrainChunk_{}_{}", chunk_x, chunk_z)),
@@ -128,7 +133,6 @@ pub fn handle_terrain_generation(
         }
 
         if !generated_chunks.is_empty() {
-            println!("Triggering terrain generation event... with {} chunks", generated_chunks.len());
             generated_events.write(TerrainGeneratedEvent {
                 chunk_coords: generated_chunks,
             });
@@ -152,10 +156,9 @@ fn calculate_chunks_in_radius(
     center_z: f32,
     radius: u32,
     chunk_size: u32,
-    scale: f32,
 ) -> Vec<(i32, i32)> {
     let mut chunks = Vec::new();
-    let chunk_world_size = chunk_size as f32 * scale;
+    let chunk_world_size = chunk_size as f32;
     
     let center_chunk_x = (center_x / chunk_world_size).floor() as i32;
     let center_chunk_z = (center_z / chunk_world_size).floor() as i32;
