@@ -4186,7 +4186,13 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "color_quant",
+ "exr",
+ "gif",
+ "jpeg-decoder",
  "num-traits",
+ "png",
+ "qoi",
+ "tiff",
 ]
 
 [[package]]
@@ -4364,6 +4370,9 @@ name = "jpeg-decoder"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5d4a7da358eff58addd2877a45865158f0d78c911d43a5784ceb7bbf52833b0"
+dependencies = [
+ "rayon",
+]
 
 [[package]]
 name = "js-sys"
@@ -6865,6 +6874,7 @@ dependencies = [
  "bevy_egui 0.34.1",
  "bevy_gltf",
  "bevy_pbr 0.16.0",
+ "image 0.24.9",
  "noise",
  "rand 0.9.1",
 ]

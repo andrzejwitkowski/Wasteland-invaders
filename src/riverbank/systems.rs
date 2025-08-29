@@ -377,23 +377,33 @@ fn get_river_terrain_modifier(position: Vec3, river_points: &[Vec3], config: &Ri
     }
     
     // Calculate carving profile
-    let carve_radius = config.river_width * 2.5; // Wider carving area
-    let river_center_width = config.river_width * 0.8; // River channel width
+    let carve_radius = config.river_width * 12.0; // Wider carving area
+    let river_center_width = config.river_width * 1.2; // River channel width
+    let transition_width = carve_radius - river_center_width; // Width of the transition zone
     
     if min_distance > carve_radius {
         return (0.0, false); // No effect outside carving radius
     }
     
-    // Create flat riverbed with smooth transitions
+    // Create flat riverbed with very gentle transitions
     if min_distance <= river_center_width {
         // Return the absolute riverbed height (river path height minus depth)
         let riverbed_height = closest_segment_height - config.river_depth * 2.0;
         return (riverbed_height, true); // This is an absolute height for riverbed
     } else {
-        // Smooth transition to banks using cosine curve for natural look
-        let transition_factor = (min_distance - river_center_width) / (carve_radius - river_center_width);
-        let smooth_factor = (1.0 + (transition_factor * std::f32::consts::PI).cos()) * 0.5;
-        let carve_depth = config.river_depth * 2.0 * smooth_factor;
+        // Much gentler transition to banks using a cubic curve for very smooth falloff
+        let transition_factor = (min_distance - river_center_width) / transition_width;
+        
+        // Use multiple smoothing curves for ultra-gentle slopes
+        let smooth_factor1 = 1.0 - (transition_factor * transition_factor * transition_factor * transition_factor); // Quartic for very gentle
+        let smooth_factor2 = 1.0 - ((transition_factor * std::f32::consts::PI * 0.5).sin().powi(4)); // Quartic sine
+        let smooth_factor3 = (1.0 + (transition_factor * std::f32::consts::PI).cos()) * 0.5; // Cosine
+        
+        // Combine all smoothing factors for ultra-gentle slopes
+        let combined_factor = (smooth_factor1 + smooth_factor2 + smooth_factor3) / 3.0;
+        
+        // Reduce the maximum carve depth for gentler overall effect
+        let carve_depth = config.river_depth * 1.5 * combined_factor; // Reduced from 2.0 to 1.5
         return (carve_depth, false); // This is a carve depth for banks
     }
 }

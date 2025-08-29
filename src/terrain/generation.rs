@@ -214,7 +214,7 @@ impl TerrainGenerator {
         let mut smoothed = heights.to_vec();
         
         // Apply multiple passes of smoothing
-        for _pass in 0..3 {
+        for _pass in 0..4 {
             for z in 1..resolution - 1 {
                 for x in 1..resolution - 1 {
                     let idx = z * resolution + x;
@@ -236,20 +236,24 @@ impl TerrainGenerator {
                         chunk_coord
                     );
                     
-                    if river_modifier > 0.1 {
+                    if river_modifier > 0.01 {
                         // Apply stronger smoothing near rivers (but not on riverbed)
                         let mut sum = 0.0;
                         let mut total_weight = 0.0;
                         
                         // Sample 5x5 neighborhood for river areas
-                        for dz in -2..=2 {
-                            for dx in -2..=2 {
+                        for dz in -3..=3 {
+                            for dx in -3..=3 {
                                 let nx = x as i32 + dx;
                                 let nz = z as i32 + dz;
                                 
                                 if nx >= 0 && nx < resolution as i32 && nz >= 0 && nz < resolution as i32 {
                                     let nidx = (nz as usize) * resolution + (nx as usize);
-                                    let weight = 1.0 / (1.0 + (dx * dx + dz * dz) as f32).sqrt();
+                                    
+                                    // Use Gaussian-like weighting for smoother results
+                                    let distance_sq = (dx * dx + dz * dz) as f32;
+                                    let weight = (-distance_sq / 8.0).exp(); // Gaussian falloff
+                                    
                                     sum += heights[nidx] * weight;
                                     total_weight += weight;
                                 }
@@ -257,7 +261,7 @@ impl TerrainGenerator {
                         }
                         
                         if total_weight > 0.0 {
-                            smoothed[idx] = heights[idx] * 0.3 + (sum / total_weight) * 0.7;
+                            smoothed[idx] = heights[idx] * 0.1 + (sum / total_weight) * 0.99;
                         }
                     } else {
                         // Standard smoothing for non-river areas

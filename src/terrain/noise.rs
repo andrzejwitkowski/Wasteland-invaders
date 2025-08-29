@@ -1,5 +1,5 @@
-use bevy::math::Vec2;
-use noise::{NoiseFn, OpenSimplex, Fbm, Seedable};
+use noise::{NoiseFn, OpenSimplex, Fbm};
+use bevy::prelude::*;
 
 pub struct TerrainNoise {
     pub base_noise: Fbm<OpenSimplex>,
@@ -55,35 +55,6 @@ impl TerrainNoise {
         let final_height = combined_height * valley_carve + detail;
         
         final_height
-    }
-
-    pub fn sample_terrain_type(&self, x: f32, z: f32, height: f32) -> TerrainType {
-        let slope = self.calculate_slope(x, z);
-        
-        match height {
-            h if h > 0.6 => TerrainType::Mountain,
-            h if h > 0.2 => {
-                if slope > 0.4 {
-                    TerrainType::Hill
-                } else {
-                    TerrainType::Plains
-                }
-            }
-            h if h > -0.2 => TerrainType::Valley,
-            _ => TerrainType::Valley,
-        }
-    }
-
-    fn calculate_slope(&self, x: f32, z: f32) -> f32 {
-        let sample_distance = 1.0;
-        let height_center = self.sample_terrain_height(x, z);
-        let height_right = self.sample_terrain_height(x + sample_distance, z);
-        let height_up = self.sample_terrain_height(x, z + sample_distance);
-        
-        let dx = height_right - height_center;
-        let dz = height_up - height_center;
-        
-        (dx * dx + dz * dz).sqrt()
     }
 }
 

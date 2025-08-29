@@ -1,125 +1,95 @@
 mod rendering;
 mod terrain;
 mod riverbank;
+mod heightmapgenerator;
+mod flyby;
 
 use bevy::prelude::*;
 use bevy_blendy_cameras::BlendyCamerasPlugin;
 use bevy_blendy_cameras::FlyCameraController;
 use bevy_blendy_cameras::OrbitCameraController;
 use bevy_egui::EguiPlugin;
-use rendering::ComplexWaterPlugin;
-use terrain::TerrainPlugin;
+use heightmapgenerator::{HeightmapGeneratorPlugin, HeightmapRendererPlugin};
 
-use crate::rendering::caustic_floor_material::CausticFloorMaterial;
-use crate::rendering::caustic_floor_material::CompleteCausticFloorMaterial;
-use crate::rendering::complex_water::CompleteComplexWaterMaterial;
-use crate::rendering::complex_water::ComplexWaterMaterial;
-use crate::riverbank::RiverBankPlugin;
+use crate::flyby::FlyByPlugin;
+use crate::rendering::ComplexWaterPlugin;
+
+use bevy::input::keyboard::KeyCode;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(EguiPlugin { enable_multipass_for_primary_context: false })
-        // .add_plugins(ComplexWaterPlugin)
-        // .add_systems(Startup, setup)
         .add_systems(Startup, (
             setup_camera_and_light,
             crate::terrain::systems::setup_terrain_materials,
         ))
-        // .add_systems(Startup, systems)
-        .add_plugins(TerrainPlugin {
-            auto_generate: true,
-            terrain_size: 512,
-            chunk_size: 64,
-        })
-        .add_plugins((
-            ComplexWaterPlugin,
-            RiverBankPlugin)
+        .add_systems(Update, (
+            camera_controls,
+            toggle_camera_mode,
         )
+        // .in_set(FlyBySystemSet)
+        )
+        .add_plugins(ComplexWaterPlugin)
+        .add_plugins(HeightmapGeneratorPlugin)
+        .add_plugins(HeightmapRendererPlugin)
         .add_plugins(BlendyCamerasPlugin)
+        .add_plugins(FlyByPlugin)
         .run();
 }
 
-fn setup(                                       
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<CompleteComplexWaterMaterial>>,
-    mut caustic_materials: ResMut<Assets<CompleteCausticFloorMaterial>>,
+fn camera_controls(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut camera_query: Query<&mut Transform, With<Camera3d>>,
+    time: Res<Time>,
 ) {
-    let water_mesh_handle = meshes.add(
-        Mesh::from(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(500))
-            .with_generated_tangents()
-            .unwrap()
-    );
+    for mut transform in camera_query.iter_mut() {
+        let mut movement = Vec3::ZERO;
+        let speed = 500.0 * time.delta_secs();
+        
+        // Arrow key movement
+        if keyboard_input.pressed(KeyCode::ArrowUp) || keyboard_input.pressed(KeyCode::KeyW) {
+            movement += transform.forward().as_vec3() * speed;
+        }
+        if keyboard_input.pressed(KeyCode::ArrowDown) || keyboard_input.pressed(KeyCode::KeyS) {
+            movement += transform.back().as_vec3() * speed;
+        }
+        if keyboard_input.pressed(KeyCode::ArrowLeft) || keyboard_input.pressed(KeyCode::KeyA) {
+            movement += transform.left().as_vec3() * speed;
+        }
+        if keyboard_input.pressed(KeyCode::ArrowRight) || keyboard_input.pressed(KeyCode::KeyD) {
+            movement += transform.right().as_vec3() * speed;
+        }
+        
+        // Vertical movement
+        if keyboard_input.pressed(KeyCode::Space) {
+            movement.y += speed;
+        }
+        if keyboard_input.pressed(KeyCode::ShiftLeft) {
+            movement.y -= speed;
+        }
+        
+        transform.translation += movement;
+    }
+}
 
-    // Add the water material to the assets.
-    let water_material = materials.add(CompleteComplexWaterMaterial {
-        // --- Set Standard PBR properties on the `base` material ---
-        base: StandardMaterial {
-            base_color: Color::srgb(0.1, 0.4, 0.7),
-            alpha_mode: AlphaMode::Blend,
-            metallic: 0.0,
-            reflectance: 0.8, // Increased for better Fresnel effect
-            perceptual_roughness: 0.05, // Very smooth for reflections
-            ..default()
-        },
-        extension: ComplexWaterMaterial {
-            // wave_params: [amplitude, frequency, speed, steepness/octaves]
-            wave_params: Vec4::new(0.35, 0.3, 1.8, 6.0),
-            // misc_params: [unused, unused, transparency, time]
-            misc_params: Vec4::new(1.0, 0.7, 0.7, 0.0),
-        },
-    });
-
-    let caustic_floor_material = caustic_materials.add(CompleteCausticFloorMaterial {
-        base: StandardMaterial {
-            base_color: Color::srgb(0.8, 0.7, 0.6), // Sandy color
-            perceptual_roughness: 0.8,
-            metallic: 0.0,
-            ..default()
-        },
-        extension: CausticFloorMaterial {
-            caustic_params: Vec4::new(2.0, 3.0, 1.0, 0.2), // intensity, scale, speed, depth_fade
-            water_params: Vec4::new(0.35, 0.3, 1.8, 6.0),  // Match your water parameters
-            misc_params: Vec4::new(0.0, 0.0, 0.0, 0.0),    // water_surface_y will be set by system
-        },
-    });
-
-    let floor_mesh = meshes.add(
-        Mesh::from(Plane3d::default().mesh().size(60.0, 60.0).subdivisions(500))
-    );
-    
-    commands.spawn((
-        Mesh3d(floor_mesh),
-        MeshMaterial3d(caustic_floor_material),
-        Transform::from_xyz(0.0, -2.0, 0.0),
-    ));
-    
-    commands.spawn((
-        Mesh3d(water_mesh_handle),
-        MeshMaterial3d(water_material),
-        Transform::from_xyz(0.0, 0.0, 0.0),
-    ));
-    
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_translation(Vec3::new(0.0, 1.5, 5.0)),
-        OrbitCameraController::default(),
-        FlyCameraController {
-            is_enabled: false,
-            ..default()
-        },
-    ));
-    
-    // Add light
-    commands.spawn((
-        DirectionalLight {
-            color: Color::WHITE,
-            illuminance: 10000.0,
-            ..default()
-        },
-        Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.5, -0.5, 0.0)),
-    ));
+fn toggle_camera_mode(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut camera_query: Query<(&mut OrbitCameraController, &mut FlyCameraController), With<Camera3d>>,
+) {
+    if keyboard_input.just_pressed(KeyCode::Tab) {
+        for (mut orbit, mut fly) in camera_query.iter_mut() {
+            if orbit.is_enabled {
+                orbit.is_enabled = false;
+                fly.is_enabled = true;
+                info!("Switched to Fly Camera mode");
+            } else {
+                orbit.is_enabled = true;
+                fly.is_enabled = false;
+                info!("Switched to Orbit Camera mode");
+            }
+        }
+    }
 }
 
 pub fn setup_camera_and_light(mut commands: Commands) {
@@ -128,9 +98,13 @@ pub fn setup_camera_and_light(mut commands: Commands) {
         Camera3d::default(),
         Transform::from_xyz(0.0, 250.0, 50.0)
             .looking_at(Vec3::ZERO, Vec3::Y),
-        OrbitCameraController::default(),
+        OrbitCameraController {
+            is_enabled: true, // Start with orbit camera
+            ..default()
+        },
         FlyCameraController {
-            is_enabled: false,
+            is_enabled: false, // Fly camera disabled initially
+            speed: 100.0,
             ..default()
         },    
     ));
@@ -145,4 +119,3 @@ pub fn setup_camera_and_light(mut commands: Commands) {
             .looking_at(Vec3::ZERO, Vec3::Y),
     ));
 }
-

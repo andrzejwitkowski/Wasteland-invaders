@@ -172,7 +172,12 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     let time = water_material.misc_params.w;
     let wave = get_noise_wave(initial_world_pos.xz, time);
-    let displaced_world_pos = vec4(wave.xyz, 1.0);
+
+    var displaced_world_pos = vec4(wave.x, 0.0, wave.z, 1.0);
+
+    // Add only a small wave displacement to the base water level
+    let wave_displacement = wave.y * 0.1; // Scale down the wave height
+    displaced_world_pos.y = initial_world_pos.y + wave_displacement;
 
     // Calculate wave normal for better lighting
     let wave_normal = get_noise_wave_normal(initial_world_pos.xz, time);
