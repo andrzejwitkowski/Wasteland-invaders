@@ -51,7 +51,6 @@ impl Material for RiverMaterial {
         AlphaMode::Blend
     }
 }
-
 impl Default for Terrain {
     fn default() -> Self {
         Self {
@@ -80,6 +79,7 @@ impl Default for RiverSettings {
         }
     }
 }
+
 pub struct FbmTerrainPlugin;
 impl Plugin for FbmTerrainPlugin {
     fn build(&self, app: &mut App) {
@@ -339,7 +339,6 @@ fn generate_terrain_system(
                 1.0
             ]);
         }
-
         // Triangles
         for z_idx in 0..num_vertices_z - 1 {
             for x_idx in 0..num_vertices_x - 1 {
