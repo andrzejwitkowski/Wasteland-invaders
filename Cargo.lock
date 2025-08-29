@@ -796,6 +796,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_blendy_cameras"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c8ea746a7a567b169ecb2c781b27890b6334fcb332d7dcebb2a819a937ff8d8"
+dependencies = [
+ "bevy 0.16.0",
+ "winit",
+]
+
+[[package]]
 name = "bevy_color"
 version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1101,6 +1111,7 @@ dependencies = [
  "bevy_input 0.16.0",
  "bevy_log 0.16.0",
  "bevy_math 0.16.0",
+ "bevy_picking",
  "bevy_platform",
  "bevy_reflect 0.16.0",
  "bevy_render 0.16.0",
@@ -1117,6 +1128,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "webbrowser",
  "wgpu-types 24.0.0",
  "winit",
 ]
@@ -4174,7 +4186,13 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "color_quant",
+ "exr",
+ "gif",
+ "jpeg-decoder",
  "num-traits",
+ "png",
+ "qoi",
+ "tiff",
 ]
 
 [[package]]
@@ -4352,6 +4370,9 @@ name = "jpeg-decoder"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5d4a7da358eff58addd2877a45865158f0d78c911d43a5784ceb7bbf52833b0"
+dependencies = [
+ "rayon",
+]
 
 [[package]]
 name = "js-sys"
@@ -6848,8 +6869,12 @@ version = "0.1.0"
 dependencies = [
  "bevy 0.16.0",
  "bevy-inspector-egui 0.31.0",
+ "bevy_blendy_cameras",
  "bevy_editor_pls",
+ "bevy_egui 0.34.1",
  "bevy_gltf",
+ "bevy_pbr 0.16.0",
+ "image 0.24.9",
  "noise",
  "rand 0.9.1",
 ]
