@@ -80,6 +80,7 @@ impl Default for RiverSettings {
         }
     }
 }
+
 pub struct FbmTerrainPlugin;
 impl Plugin for FbmTerrainPlugin {
     fn build(&self, app: &mut App) {
