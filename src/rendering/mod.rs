@@ -12,7 +12,6 @@ pub mod water;
 pub mod complex_water;
 pub mod caustic_floor_material;
 
-
 pub use debug::DebugRenderPlugin;
 pub use camera::CameraPlugin;
 pub use input::InputPlugin;

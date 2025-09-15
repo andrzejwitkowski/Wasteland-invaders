@@ -51,6 +51,7 @@ impl Material for RiverMaterial {
         AlphaMode::Blend
     }
 }
+
 impl Default for Terrain {
     fn default() -> Self {
         Self {
@@ -339,6 +340,7 @@ fn generate_terrain_system(
                 1.0
             ]);
         }
+
         // Triangles
         for z_idx in 0..num_vertices_z - 1 {
             for x_idx in 0..num_vertices_x - 1 {
