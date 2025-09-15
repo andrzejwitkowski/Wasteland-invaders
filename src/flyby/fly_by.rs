@@ -3,7 +3,6 @@
 // Use this to replace your entire file.
 
 use bevy::prelude::*;
-use bevy::gizmos::prelude::*;
 use bevy_blendy_cameras::{FlyCameraController, OrbitCameraController};
 use bevy_egui::{egui, EguiContexts};
 use crate::heightmapgenerator::height_map_renderer::{HeightmapTerrain, HeightmapRenderConfig};
