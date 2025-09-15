@@ -72,8 +72,8 @@ impl WaterConfigUI {
 impl Default for ComplexWaterMaterial {
     fn default() -> Self {
         Self {
-            wave_params: Vec4::new(0.6, 1.5, 1.5, 0.8), // amplitude, frequency, speed, steepness
-            misc_params: Vec4::new(1.0, 0.7, 0.6, 0.0), // foam_intensity, foam_cutoff, transparency, time
+            wave_params: Vec4::new(10.0, 0.5, 0.5, 4.0), // amplitude, frequency, speed, steepness
+            misc_params: Vec4::new(0.8, 0.3, 0.7, 0.0), // foam_intensity, foam_cutoff, transparency, time
         }
     }
 }
@@ -82,7 +82,7 @@ impl Default for WaterConfigUI {
     fn default() -> Self {
         Self {
             // Good starting values for realistic water
-            wave_amplitude: 0.15,
+            wave_amplitude: 1.0,
             wave_frequency: 0.3,
             wave_speed: 0.8,
             wave_steepness: 3.0,
@@ -154,9 +154,9 @@ fn water_ui_system(
         .show(contexts.ctx_mut(), |ui| {
             ui.heading("Wave Parameters");
             
-            ui.add(egui::Slider::new(&mut config.wave_amplitude, 0.0..=1.5)
+            ui.add(egui::Slider::new(&mut config.wave_amplitude, 0.0..=5.0)
                 .text("Amplitude")
-                .step_by(0.01));
+                .step_by(0.1));
                 
             ui.add(egui::Slider::new(&mut config.wave_frequency, 0.1..=3.0)
                 .text("Frequency")

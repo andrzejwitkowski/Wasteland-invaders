@@ -113,9 +113,12 @@ fn get_noise_wave(pos: vec2<f32>, time: f32) -> vec4<f32> {
     let wave_frequency = water_material.wave_params.y; // Controls noise scale
     let wave_speed = water_material.wave_params.z;
     let wave_steepness = water_material.wave_params.w; // Controls octaves
+
+    // Scale down frequency for larger waves
+    let scaled_frequency = wave_frequency * 0.1;
     
     // Create animated position for noise
-    let animated_pos = pos * wave_frequency;
+    let animated_pos = pos * scaled_frequency;
     let time_offset1 = vec2<f32>(time * wave_speed * 0.3, time * wave_speed * 0.2);
     let time_offset2 = vec2<f32>(time * wave_speed * 0.1, time * wave_speed * 0.4);
     
@@ -132,7 +135,7 @@ fn get_noise_wave(pos: vec2<f32>, time: f32) -> vec4<f32> {
     let combined_noise = noise1 * 0.7 + noise2 * 0.3;
     
     // Calculate height
-    let height = combined_noise * wave_amplitude;
+    let height = combined_noise * wave_amplitude * 3.0;
     
     // Calculate horizontal displacement for more realistic water motion
     let displacement_scale = wave_amplitude * 0.2;
@@ -173,11 +176,11 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let time = water_material.misc_params.w;
     let wave = get_noise_wave(initial_world_pos.xz, time);
 
-    var displaced_world_pos = vec4(wave.x, 0.0, wave.z, 1.0);
+    var displaced_world_pos = vec4(wave.x, wave.y, wave.z, 1.0);
 
     // Add only a small wave displacement to the base water level
-    let wave_displacement = wave.y * 0.1; // Scale down the wave height
-    displaced_world_pos.y = initial_world_pos.y + wave_displacement;
+    // let wave_displacement = wave.y * 0.1; // Scale down the wave height
+    // displaced_world_pos.y = initial_world_pos.y + wave_displacement;
 
     // Calculate wave normal for better lighting
     let wave_normal = get_noise_wave_normal(initial_world_pos.xz, time);

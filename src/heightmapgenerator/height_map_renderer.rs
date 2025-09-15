@@ -1,4 +1,3 @@
-use bevy::picking::backend;
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
@@ -29,7 +28,7 @@ impl Default for HeightmapRenderConfig {
     fn default() -> Self {
         Self {
             chunk_size: 512.0,
-            vertex_density: 257, // 257x257 vertices for good detail
+            vertex_density: 513, // 257x257 vertices for good detail
             water_level_offset: 5.0,
             enable_water_rendering: true,
         }
@@ -44,107 +43,10 @@ impl Plugin for HeightmapRendererPlugin {
             .init_resource::<HeightmapRenderConfig>()
             .init_resource::<LastWaterLevelOffset>()
             .add_systems(Update, (
-                heightmap_render_ui, 
-                update_water_level_efficiently
+                heightmap_render_ui,
+                update_water_level_on_change,
             )
             );
-    }
-}
-
-// Replace the update_water_level_efficiently function:
-fn update_water_level_efficiently(
-    render_config: Res<HeightmapRenderConfig>,
-    mut last_offset: ResMut<LastWaterLevelOffset>,
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut water_materials: ResMut<Assets<CompleteComplexWaterMaterial>>,
-    water_query: Query<Entity, With<HeightmapWater>>,
-    terrain_query: Query<Entity, With<HeightmapTerrain>>,
-) {
-    // Only update if the offset actually changed and terrain exists
-    let offset_diff = (render_config.water_level_offset - last_offset.offset).abs();
-    if offset_diff > 0.05 && !water_query.is_empty() && !terrain_query.is_empty() {
-        info!("=== RECREATING WATER ===");
-        info!("Offset change: {:.3} (from {:.3} to {:.3})", 
-              offset_diff, last_offset.offset, render_config.water_level_offset);
-        
-        // Remove existing water entities
-        let water_count = water_query.iter().count();
-        for entity in water_query.iter() {
-            commands.entity(entity).despawn();
-        }
-        info!("Removed {} water entities", water_count);
-        
-        // Create simple flat water surface at the specified level
-        if render_config.enable_water_rendering {
-            // Create a simple flat water surface for testing
-            let base_height = 0.0; // Assume terrain is around Y=0
-            let water_level = base_height + render_config.water_level_offset;
-            
-            info!("Creating flat water surface at Y = {:.3}", water_level);
-            
-            // Create a simple rectangular water mesh
-            let vertices = vec![
-                [-200.0, 0.0, -200.0],
-                [200.0, 0.0, -200.0],
-                [200.0, 0.0, 200.0],
-                [-200.0, 0.0, 200.0],
-            ];
-            
-            let normals = vec![
-                [0.0, 1.0, 0.0],
-                [0.0, 1.0, 0.0],
-                [0.0, 1.0, 0.0],
-                [0.0, 1.0, 0.0],
-            ];
-            
-            let uvs = vec![
-                [0.0, 0.0],
-                [1.0, 0.0],
-                [1.0, 1.0],
-                [0.0, 1.0],
-            ];
-            
-            let indices = vec![0u32, 1, 2, 0, 2, 3];
-            
-            let mut water_mesh = Mesh::new(
-                PrimitiveTopology::TriangleList,
-                RenderAssetUsages::RENDER_WORLD,
-            );
-            water_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
-            water_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-            water_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-            water_mesh.insert_indices(Indices::U32(indices));
-            
-            let water_mesh_handle = meshes.add(water_mesh);
-            
-            let water_material = CompleteComplexWaterMaterial {
-                base: StandardMaterial {
-                    base_color: Color::srgba(0.0, 0.4, 0.8, 0.7),
-                    alpha_mode: AlphaMode::Blend,
-                    perceptual_roughness: 0.02,
-                    metallic: 0.1,
-                    reflectance: 0.9,
-                    ..default()
-                },
-                extension: crate::rendering::complex_water::ComplexWaterMaterial {
-                    wave_params: Vec4::new(0.08, 0.8, 2.0, 2.0),
-                    misc_params: Vec4::new(0.95, 0.8, 0.7, 0.0),
-                },
-            };
-            
-            commands.spawn((
-                Mesh3d(water_mesh_handle),
-                MeshMaterial3d(water_materials.add(water_material)),
-                Transform::from_xyz(0.0, 0.0, 0.0),
-                HeightmapWater,
-            ));
-            
-            info!("Created flat water mesh at Y = {:.3}", water_level);
-        }
-        
-        last_offset.offset = render_config.water_level_offset;
-        info!("=== WATER RECREATION COMPLETE ===");
     }
 }
 
@@ -158,15 +60,15 @@ pub fn heightmap_render_ui(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut water_materials: ResMut<Assets<CompleteComplexWaterMaterial>>,
     terrain_query: Query<Entity, Or<(With<HeightmapTerrain>, With<HeightmapWater>)>>,
-    last_offset: ResMut<LastWaterLevelOffset>,
 ) {
     bevy_egui::egui::Window::new("Heightmap Renderer")
         .default_width(350.0)
         .show(contexts.ctx_mut(), |ui| {
             ui.heading("Render Settings");
             
-            ui.add(bevy_egui::egui::Slider::new(&mut render_config.vertex_density, 65..=513)
-                .text("Vertex Density"));
+            ui.add(bevy_egui::egui::Slider::new(&mut render_config.vertex_density, 128..=1025)
+                .text("Vertex Density")
+                .step_by(32.0));
                 
             // In the heightmap_render_ui function, change the slider range:
             ui.add(bevy_egui::egui::Slider::new(&mut render_config.water_level_offset, -15.0..=15.0)
@@ -191,7 +93,6 @@ pub fn heightmap_render_ui(
                     &heightmap_config,
                     &render_config,
                     &terrain_query,
-                    last_offset,
                 );
             }
             
@@ -200,6 +101,7 @@ pub fn heightmap_render_ui(
             }
         });
 }
+
 fn clear_rendered_terrain(
     commands: &mut Commands,
     terrain_query: &Query<Entity, Or<(With<HeightmapTerrain>, With<HeightmapWater>)>>,
@@ -219,7 +121,6 @@ fn render_heightmap_terrain(
     heightmap_config: &HeightmapConfig,
     render_config: &HeightmapRenderConfig,
     terrain_query: &Query<Entity, Or<(With<HeightmapTerrain>, With<HeightmapWater>)>>,
-    mut last_offset: ResMut<LastWaterLevelOffset>,
 ) {
     // Clear existing terrain first
     clear_rendered_terrain(commands, terrain_query);
@@ -256,7 +157,7 @@ fn render_heightmap_terrain(
     if render_config.enable_water_rendering && !water_areas.is_empty() {
         let water_mesh = create_water_mesh_from_areas(
             &water_areas,
-            render_config,
+            &render_config,
         );
         
         let water_mesh_handle = meshes.add(water_mesh);
@@ -284,8 +185,6 @@ fn render_heightmap_terrain(
             Transform::from_xyz(0.0, 0.0, 0.0),
             HeightmapWater,
         ));
-
-        last_offset.offset = render_config.water_level_offset;
         
         info!("Water mesh created with {} areas", water_areas.len());
     }
@@ -459,13 +358,7 @@ fn create_water_mesh_from_areas(
     }
     
     // Use render config to determine water mesh quality
-    let water_segments = if render_config.vertex_density > 400 {
-        100 // High quality for high vertex density
-    } else if render_config.vertex_density > 200 {
-        50  // Medium quality
-    } else {
-        25  // Lower quality for performance
-    };
+    let water_segments = render_config.vertex_density - 1;
     
     let step_x = (max_x - min_x) / water_segments as f32;
     let step_z = (max_z - min_z) / water_segments as f32;
@@ -475,8 +368,10 @@ fn create_water_mesh_from_areas(
             let world_x = min_x + x as f32 * step_x;
             let world_z = min_z + z as f32 * step_z;
             
-            // EVERY vertex at the same flat level!
-            vertices.push([world_x, flat_water_level, world_z]);
+            // Dodaj minimalną wariację wysokości (0.001) aby uniknąć idealnie płaskiej siatki
+            let height_variation = ((x as f32 * 0.1 + z as f32 * 0.1).sin() * 0.001).abs();
+            
+            vertices.push([world_x, flat_water_level + height_variation, world_z]);
             normals.push([0.0, 1.0, 0.0]);
             
             let u = (x as f32 / water_segments as f32) * 8.0;
@@ -507,7 +402,10 @@ fn create_water_mesh_from_areas(
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.insert_indices(Indices::U32(indices));
-    
+
+    info!("Water mesh created with {}x{} vertices ({} polys)", 
+          water_segments + 1, water_segments + 1, water_segments * water_segments * 2);
+
     mesh
 }  
 
@@ -521,4 +419,18 @@ fn create_empty_mesh() -> Mesh {
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, Vec::<[f32; 2]>::new());
     mesh.insert_indices(Indices::U32(Vec::new()));
     mesh
+}
+
+fn update_water_level_on_change(
+    render_config: Res<HeightmapRenderConfig>,
+    mut last_offset: ResMut<LastWaterLevelOffset>,
+    mut water_query: Query<&mut Transform, With<HeightmapWater>>,
+) {
+    let offset_diff = (render_config.water_level_offset - last_offset.offset).abs();
+    if offset_diff > 0.01 && !water_query.is_empty() {
+        for mut transform in water_query.iter_mut() {
+            transform.translation.y = render_config.water_level_offset;
+        }
+        last_offset.offset = render_config.water_level_offset;
+    }
 }

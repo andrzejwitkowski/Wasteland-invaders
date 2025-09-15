@@ -6,7 +6,6 @@ mod flyby;
 
 use bevy::prelude::*;
 use bevy_blendy_cameras::BlendyCamerasPlugin;
-use bevy_blendy_cameras::FlyCameraController;
 use bevy_blendy_cameras::OrbitCameraController;
 use bevy_egui::EguiPlugin;
 use heightmapgenerator::{HeightmapGeneratorPlugin, HeightmapRendererPlugin};
@@ -19,7 +18,14 @@ use bevy::input::keyboard::KeyCode;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Wasteland Invaders".to_string(),
+                resolution: (1920., 1080.).into(),
+                ..default()
+            }),
+            ..default()
+        }))
         .add_plugins(EguiPlugin { enable_multipass_for_primary_context: false })
         .add_systems(Startup, (
             setup_camera_and_light,
@@ -27,7 +33,6 @@ fn main() {
         ))
         .add_systems(Update, (
             camera_controls,
-            toggle_camera_mode,
         ))
         .add_plugins(ComplexWaterPlugin)
         .add_plugins(HeightmapGeneratorPlugin)
@@ -39,15 +44,14 @@ fn main() {
 
 fn camera_controls(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut camera_query: Query<&mut Transform, (With<Camera3d>, Without<RiverRaidCamera>)>, // Exclude flying cameras
+    mut camera_query: Query<(&mut Transform, &mut OrbitCameraController), (With<Camera3d>, Without<RiverRaidCamera>)>,
     time: Res<Time>,
 ) {
-    // Only control cameras that are NOT doing River Raid flyby
-    for mut transform in camera_query.iter_mut() {
+    for (mut transform, mut orbit_controller) in camera_query.iter_mut() {
         let mut movement = Vec3::ZERO;
         let speed = 500.0 * time.delta_secs();
         
-        // Arrow key movement
+        // Ruch strzałkami
         if keyboard_input.pressed(KeyCode::ArrowUp) || keyboard_input.pressed(KeyCode::KeyW) {
             movement += transform.forward().as_vec3() * speed;
         }
@@ -61,7 +65,6 @@ fn camera_controls(
             movement += transform.right().as_vec3() * speed;
         }
         
-        // Vertical movement
         if keyboard_input.pressed(KeyCode::Space) {
             movement.y += speed;
         }
@@ -70,24 +73,9 @@ fn camera_controls(
         }
         
         transform.translation += movement;
-    }
-}
-
-fn toggle_camera_mode(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut camera_query: Query<(&mut OrbitCameraController, &mut FlyCameraController), (With<Camera3d>, Without<RiverRaidCamera>)>,
-) {
-    if keyboard_input.just_pressed(KeyCode::Tab) {
-        for (mut orbit, mut fly) in camera_query.iter_mut() {
-            if orbit.is_enabled {
-                orbit.is_enabled = false;
-                fly.is_enabled = true;
-                info!("Switched to Fly Camera mode");
-            } else {
-                orbit.is_enabled = true;
-                fly.is_enabled = false;
-                info!("Switched to Orbit Camera mode");
-            }
+        
+        if movement.length_squared() > 0.0 {
+            orbit_controller.focus = transform.translation + transform.forward() * 10.0;
         }
     }
 }
@@ -102,11 +90,6 @@ pub fn setup_camera_and_light(mut commands: Commands) {
             is_enabled: true, // Start with orbit camera
             ..default()
         },
-        FlyCameraController {
-            is_enabled: false, // Fly camera disabled initially
-            speed: 100.0,
-            ..default()
-        },    
     ));
 
     // Light
