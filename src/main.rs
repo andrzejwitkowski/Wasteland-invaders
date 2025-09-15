@@ -12,7 +12,7 @@ use bevy_egui::EguiPlugin;
 use heightmapgenerator::{HeightmapGeneratorPlugin, HeightmapRendererPlugin};
 
 use crate::flyby::FlyByPlugin;
-use crate::flyby::OriginalCameraTransform;
+use crate::flyby::RiverRaidCamera; // Import the component instead
 use crate::rendering::ComplexWaterPlugin;
 
 use bevy::input::keyboard::KeyCode;
@@ -28,9 +28,7 @@ fn main() {
         .add_systems(Update, (
             camera_controls,
             toggle_camera_mode,
-        )
-        // .in_set(FlyBySystemSet)
-        )
+        ))
         .add_plugins(ComplexWaterPlugin)
         .add_plugins(HeightmapGeneratorPlugin)
         .add_plugins(HeightmapRendererPlugin)
@@ -41,15 +39,10 @@ fn main() {
 
 fn camera_controls(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut camera_query: Query<&mut Transform, With<Camera3d>>,
+    mut camera_query: Query<&mut Transform, (With<Camera3d>, Without<RiverRaidCamera>)>, // Exclude flying cameras
     time: Res<Time>,
-    flyby_camera_resource: Option<Res<OriginalCameraTransform>>, // Check if flyby is active
 ) {
-
-    if flyby_camera_resource.is_some() {
-        return; // Don't allow manual camera movement when flyby is controlling camera
-    }
-
+    // Only control cameras that are NOT doing River Raid flyby
     for mut transform in camera_query.iter_mut() {
         let mut movement = Vec3::ZERO;
         let speed = 500.0 * time.delta_secs();
@@ -82,7 +75,7 @@ fn camera_controls(
 
 fn toggle_camera_mode(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut camera_query: Query<(&mut OrbitCameraController, &mut FlyCameraController), With<Camera3d>>,
+    mut camera_query: Query<(&mut OrbitCameraController, &mut FlyCameraController), (With<Camera3d>, Without<RiverRaidCamera>)>,
 ) {
     if keyboard_input.just_pressed(KeyCode::Tab) {
         for (mut orbit, mut fly) in camera_query.iter_mut() {
