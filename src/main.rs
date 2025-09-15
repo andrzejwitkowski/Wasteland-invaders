@@ -12,6 +12,7 @@ use bevy_egui::EguiPlugin;
 use heightmapgenerator::{HeightmapGeneratorPlugin, HeightmapRendererPlugin};
 
 use crate::flyby::FlyByPlugin;
+use crate::flyby::OriginalCameraTransform;
 use crate::rendering::ComplexWaterPlugin;
 
 use bevy::input::keyboard::KeyCode;
@@ -42,7 +43,13 @@ fn camera_controls(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut camera_query: Query<&mut Transform, With<Camera3d>>,
     time: Res<Time>,
+    flyby_camera_resource: Option<Res<OriginalCameraTransform>>, // Check if flyby is active
 ) {
+
+    if flyby_camera_resource.is_some() {
+        return; // Don't allow manual camera movement when flyby is controlling camera
+    }
+
     for mut transform in camera_query.iter_mut() {
         let mut movement = Vec3::ZERO;
         let speed = 500.0 * time.delta_secs();
