@@ -327,6 +327,8 @@ fn camera_event_handler_system(
             });
             
             info!("✅ River Raid flyby started with {} turbulence!", flyby_state.turbulence_type.as_str());
+        } else {
+            info!("❌ River Raid flyby not started because of missing waypoints!");
         }
     }
     
