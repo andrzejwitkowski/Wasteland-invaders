@@ -6,6 +6,7 @@ mod flyby;
 
 use bevy::prelude::*;
 use bevy_blendy_cameras::BlendyCamerasPlugin;
+use bevy_blendy_cameras::FlyCameraController;
 use bevy_blendy_cameras::OrbitCameraController;
 use bevy_egui::EguiPlugin;
 use heightmapgenerator::{HeightmapGeneratorPlugin, HeightmapRendererPlugin};
@@ -90,6 +91,11 @@ pub fn setup_camera_and_light(mut commands: Commands) {
             is_enabled: true, // Start with orbit camera
             ..default()
         },
+        FlyCameraController {
+            is_enabled: false, // Fly camera disabled initially
+            speed: 100.0,
+            ..default()
+        },  
     ));
 
     // Light

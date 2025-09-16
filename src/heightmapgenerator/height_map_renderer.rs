@@ -29,7 +29,7 @@ impl Default for HeightmapRenderConfig {
         Self {
             chunk_size: 512.0,
             vertex_density: 513, // 257x257 vertices for good detail
-            water_level_offset: 5.0,
+            water_level_offset: 0.0,
             enable_water_rendering: true,
         }
     }
@@ -182,7 +182,7 @@ fn render_heightmap_terrain(
         commands.spawn((
             Mesh3d(water_mesh_handle),
             MeshMaterial3d(water_materials.add(water_material)),
-            Transform::from_xyz(0.0, 0.0, 0.0),
+            Transform::from_xyz(0.0, render_config.water_level_offset, 0.0), // Apply offset here!
             HeightmapWater,
         ));
         
@@ -233,10 +233,9 @@ fn create_terrain_mesh_from_heightmap(
             uvs.push([x as f32 / (width - 1) as f32, z as f32 / (height - 1) as f32]);
             
             if is_water {
-                // Water sits at the actual terrain height (riverbed) plus offset
-                let water_surface_level = terrain_height + render_config.water_level_offset;
+                // Store BASE terrain height (riverbed) WITHOUT offset
                 water_areas.push(WaterArea {
-                    position: Vec3::new(world_x, water_surface_level, world_z),
+                    position: Vec3::new(world_x, terrain_height, world_z), // Just riverbed height
                     size: world_size / width as f32,
                 });
             }
@@ -333,11 +332,7 @@ fn create_water_mesh_from_areas(
         return create_empty_mesh();
     }
 
-    let flat_water_level = if !water_areas.is_empty() {
-        water_areas[0].position.y  // Just use the first area's Y level
-    } else {
-        render_config.water_level_offset
-    };
+    let base_water_level = water_areas[0].position.y;
     
     let mut vertices = Vec::new();
     let mut normals = Vec::new();
@@ -368,10 +363,10 @@ fn create_water_mesh_from_areas(
             let world_x = min_x + x as f32 * step_x;
             let world_z = min_z + z as f32 * step_z;
             
-            // Dodaj minimalną wariację wysokości (0.001) aby uniknąć idealnie płaskiej siatki
+            // // Dodaj minimalną wariację wysokości (0.001) aby uniknąć idealnie płaskiej siatki
             let height_variation = ((x as f32 * 0.1 + z as f32 * 0.1).sin() * 0.001).abs();
-            
-            vertices.push([world_x, flat_water_level + height_variation, world_z]);
+
+            vertices.push([world_x, base_water_level + height_variation, world_z]);
             normals.push([0.0, 1.0, 0.0]);
             
             let u = (x as f32 / water_segments as f32) * 8.0;
@@ -427,10 +422,17 @@ fn update_water_level_on_change(
     mut water_query: Query<&mut Transform, With<HeightmapWater>>,
 ) {
     let offset_diff = (render_config.water_level_offset - last_offset.offset).abs();
+    
     if offset_diff > 0.01 && !water_query.is_empty() {
+        info!("🌊 Updating water level from {:.2} to {:.2}", 
+              last_offset.offset, render_config.water_level_offset);
+        
         for mut transform in water_query.iter_mut() {
+            let old_y = transform.translation.y;
             transform.translation.y = render_config.water_level_offset;
+            info!("🌊 Water transform Y: {:.2} -> {:.2}", old_y, transform.translation.y);
         }
+        
         last_offset.offset = render_config.water_level_offset;
     }
 }

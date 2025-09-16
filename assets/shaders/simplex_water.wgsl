@@ -176,11 +176,16 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let time = water_material.misc_params.w;
     let wave = get_noise_wave(initial_world_pos.xz, time);
 
-    var displaced_world_pos = vec4(wave.x, wave.y, wave.z, 1.0);
-
-    // Add only a small wave displacement to the base water level
-    // let wave_displacement = wave.y * 0.1; // Scale down the wave height
-    // displaced_world_pos.y = initial_world_pos.y + wave_displacement;
+    // FIXED: Apply the wave displacement properly
+    var displaced_world_pos = initial_world_pos;
+    
+    // Add wave displacement to create water surface animation
+    let wave_displacement = wave.y * 0.1; // Scale down the wave height for subtle movement
+    displaced_world_pos.y = initial_world_pos.y + wave_displacement;
+    
+    // Also apply horizontal displacement for more realistic water motion
+    displaced_world_pos.x = wave.x;
+    displaced_world_pos.z = wave.z;
 
     // Calculate wave normal for better lighting
     let wave_normal = get_noise_wave_normal(initial_world_pos.xz, time);
