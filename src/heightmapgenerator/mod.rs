@@ -1,5 +1,6 @@
 pub mod height_map_generator;
 pub mod height_map_renderer;
+pub mod enemy_placement_generator;
 
 pub use height_map_generator::*;
 pub use height_map_renderer::*;

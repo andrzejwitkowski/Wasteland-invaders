@@ -12,7 +12,8 @@ use bevy_egui::EguiPlugin;
 use heightmapgenerator::{HeightmapGeneratorPlugin, HeightmapRendererPlugin};
 
 use crate::flyby::FlyByPlugin;
-use crate::flyby::RiverRaidCamera; // Import the component instead
+use crate::flyby::RiverRaidCamera;
+// Import the component instead
 use crate::rendering::ComplexWaterPlugin;
 
 use bevy::input::keyboard::KeyCode;
