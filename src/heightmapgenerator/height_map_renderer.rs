@@ -3,6 +3,7 @@ use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
 
 use super::height_map_generator::{HeightmapConfig, HeightmapNoise};
+use crate::heightmapgenerator::enemy_placement_generator;
 use crate::rendering::complex_water::CompleteComplexWaterMaterial;
 
 #[derive(Component)]
@@ -42,6 +43,7 @@ impl Plugin for HeightmapRendererPlugin {
         app
             .init_resource::<HeightmapRenderConfig>()
             .init_resource::<LastWaterLevelOffset>()
+            .init_resource::<enemy_placement_generator::EnemyPlacementGenerator>()
             .add_systems(Update, (
                 heightmap_render_ui,
                 update_water_level_on_change,
@@ -60,6 +62,7 @@ pub fn heightmap_render_ui(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut water_materials: ResMut<Assets<CompleteComplexWaterMaterial>>,
     terrain_query: Query<Entity, Or<(With<HeightmapTerrain>, With<HeightmapWater>)>>,
+    enemy_generator: Res<enemy_placement_generator::EnemyPlacementGenerator>,
 ) {
     bevy_egui::egui::Window::new("Heightmap Renderer")
         .default_width(350.0)
@@ -98,6 +101,31 @@ pub fn heightmap_render_ui(
             
             if ui.button("Clear Rendered Terrain").clicked() {
                 clear_rendered_terrain(&mut commands, &terrain_query);
+            }
+
+            if ui.button("Generate & Save Enemy Placement Map").clicked() {
+                let heightmap_data = heightmap_noise.generate_heightmap(&heightmap_config);
+                let river_mask = generate_river_mask_for_enemy_placement(&heightmap_noise, &heightmap_config);
+                
+                let (zones, terrain_analysis) = enemy_generator.generate_enemy_placement_map(
+                    &heightmap_data,
+                    &river_mask,
+                    heightmap_config.width as usize,
+                    heightmap_config.height as usize,
+                );
+                
+                let filename = format!("enemy_placement_{}x{}_{}.png", 
+                    heightmap_config.width, heightmap_config.height, heightmap_config.seed);
+                
+                enemy_generator.save_terrain_analysis_map(
+                    &terrain_analysis,
+                    &zones,
+                    heightmap_config.width as usize,
+                    heightmap_config.height as usize,
+                    &filename,
+                ).unwrap();
+                
+                info!("Enemy placement map saved as {}", filename);
             }
         });
 }
@@ -435,4 +463,25 @@ fn update_water_level_on_change(
         
         last_offset.offset = render_config.water_level_offset;
     }
+}
+
+fn generate_river_mask_for_enemy_placement(
+    heightmap_noise: &HeightmapNoise,
+    config: &HeightmapConfig,
+) -> Vec<Vec<f32>> {
+    let mut river_mask = vec![vec![0.0; config.width as usize]; config.height as usize];
+    let world_size = 512.0;
+    let pixel_to_world = world_size / config.width as f32;
+    
+    for y in 0..config.height {
+        for x in 0..config.width {
+            let world_x = (x as f32 - config.width as f32 * 0.5) * pixel_to_world;
+            let world_z = (y as f32 - config.height as f32 * 0.5) * pixel_to_world;
+            
+            let river_mod = heightmap_noise.calculate_river_modification(Vec2::new(world_x, world_z), config);
+            river_mask[y as usize][x as usize] = (-river_mod / config.river_depth).clamp(0.0, 1.0);
+        }
+    }
+    
+    river_mask
 }

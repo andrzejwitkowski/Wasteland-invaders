@@ -24,6 +24,12 @@ pub struct HeightmapConfig {
     pub valley_flattening: f32,    // How much the valley floor is flattened
     pub erosion_smoothing: f32,    // Smoothing factor for eroded areas
 
+    pub flat_area_radius: f32,          // Radius for flat area generation
+    pub flat_area_strength: f32,        // How flat the areas should be (0-1)
+    pub flat_area_frequency: f32,       // Frequency of flat area occurrence
+    pub hill_steepness: f32,            // How steep hills should be
+    pub terrain_roughness: f32,  
+
     pub river_start: Vec2,
     pub river_direction: Vec2,
     pub seed: u32,
@@ -49,6 +55,11 @@ impl Default for HeightmapConfig {
             erosion_radius: 120.0,     
             valley_flattening: 0.7,    
             erosion_smoothing: 0.6,   
+            flat_area_radius: 100.0,
+            flat_area_strength: 0.8,
+            flat_area_frequency: 0.002,
+            hill_steepness: 1.2,
+            terrain_roughness: 0.5,
             river_start: Vec2::new(-256.0, 0.0),
             river_direction: Vec2::new(1.0, 0.1),
             seed: 42,
@@ -68,6 +79,8 @@ pub struct HeightmapNoise {
     pub river_chaos_noise: Fbm<OpenSimplex>, // Chaotic variations
     pub river_scale_noise: Perlin,
     pub river_width_noise: Perlin,
+    pub flat_area_noise: Perlin,        // Noise for flat area placement
+    pub hill_noise: Fbm<OpenSimplex>,   // Additional noise for hilly areas
 }
 
 impl HeightmapNoise {
@@ -84,6 +97,12 @@ impl HeightmapNoise {
         river_chaos_noise.persistence = 0.4;
         river_chaos_noise.octaves = 3;
 
+        let mut hill_noise = Fbm::<OpenSimplex>::new(seed + 20);
+        hill_noise.frequency = 0.008;
+        hill_noise.lacunarity = 2.2;
+        hill_noise.persistence = 0.6;
+        hill_noise.octaves = 5;
+
         Self {
             terrain_base,
             terrain_detail: OpenSimplex::new(seed + 1),
@@ -93,6 +112,8 @@ impl HeightmapNoise {
             river_chaos_noise,
             river_scale_noise: Perlin::new(seed + 7),
             river_width_noise: Perlin::new(seed + 9),
+            flat_area_noise: Perlin::new(seed + 18),
+            hill_noise,
         }
     }
 
@@ -124,7 +145,7 @@ impl HeightmapNoise {
         let warped_z = z + warp_z;
         
         // Generate base terrain height
-        let base_terrain_height = self.sample_terrain_height(warped_x, warped_z, config);
+        let base_terrain_height = self.sample_enhanced_terrain_height(warped_x, warped_z, config);
         
         // Calculate river effects (erosion + carving)
         let (river_modification, erosion_factor) = self.calculate_river_effects(Vec2::new(x, z), config);
@@ -355,6 +376,70 @@ impl HeightmapNoise {
             0.0
         }
     }
+
+    fn sample_enhanced_terrain_height(&self, x: f32, z: f32, config: &HeightmapConfig) -> f32 {
+        let pos = [x as f64 * config.scale as f64, z as f64 * config.scale as f64];
+        
+        // Base terrain with increased hill steepness
+        let mut base = self.terrain_base.get(pos) as f32;
+        base = base.abs().powf(config.hill_steepness) * base.signum(); // Enhance hills
+        
+        // Additional hill noise for more varied topography
+        let hill_detail = self.hill_noise.get([
+            x as f64 * config.scale as f64 * 2.0,
+            z as f64 * config.scale as f64 * 2.0
+        ]) as f32 * 0.3 * config.terrain_roughness;
+        
+        // Detail layer with roughness control
+        let detail = self.terrain_detail.get([x as f64 * 0.05, z as f64 * 0.05]) as f32 * 
+                    0.1 * config.terrain_roughness;
+        
+        // Apply flat area masking
+        let flat_mask = self.calculate_flat_area_mask(x, z, config);
+        let enhanced_terrain = (base + hill_detail + detail) * config.terrain_amplitude;
+        
+        // Blend between enhanced terrain and flattened version
+        enhanced_terrain * (1.0 - flat_mask) + (enhanced_terrain * 0.3) * flat_mask
+    }
+
+    fn calculate_flat_area_mask(&self, x: f32, z: f32, config: &HeightmapConfig) -> f32 {
+        // Generate flat area centers using noise
+        let flat_center_value = self.flat_area_noise.get([
+            x as f64 * config.flat_area_frequency as f64,
+            z as f64 * config.flat_area_frequency as f64
+        ]) as f32;
+        
+        // Threshold to determine if this is a flat area center
+        if flat_center_value > 0.6 {
+            // Sample nearby points to create smooth circular flat areas
+            let mut total_flatness = 0.0;
+            let sample_count = 8;
+            
+            for i in 0..sample_count {
+                let angle = (i as f32 / sample_count as f32) * std::f32::consts::TAU;
+                let sample_x = x + angle.cos() * config.flat_area_radius * 0.5;
+                let sample_z = z + angle.sin() * config.flat_area_radius * 0.5;
+                
+                let sample_value = self.flat_area_noise.get([
+                    sample_x as f64 * config.flat_area_frequency as f64,
+                    sample_z as f64 * config.flat_area_frequency as f64
+                ]) as f32;
+                
+                total_flatness += sample_value;
+            }
+            
+            let avg_flatness = total_flatness / sample_count as f32;
+            
+            // Create smooth falloff from center to edge
+            let distance_factor = 1.0 - (flat_center_value - 0.6) / 0.4; // 0.6-1.0 -> 1.0-0.0
+            let flat_strength = avg_flatness * distance_factor * config.flat_area_strength;
+            
+            flat_strength.clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
+    }
+
 }
 
 pub struct HeightmapGeneratorPlugin;
@@ -383,7 +468,7 @@ pub fn heightmap_ui(
         .show(contexts.ctx_mut(), |ui| {
             ui.heading("Terrain Settings");
             
-            ui.add(bevy_egui::egui::Slider::new(&mut config.terrain_amplitude, 10.0..=100.0)
+            ui.add(bevy_egui::egui::Slider::new(&mut config.terrain_amplitude, 10.0..=1000.0)
                 .text("Terrain Amplitude"));
             
             ui.add(bevy_egui::egui::Slider::new(&mut config.scale, 0.001..=0.02)
@@ -436,6 +521,24 @@ pub fn heightmap_ui(
             
             ui.add(bevy_egui::egui::Slider::new(&mut config.flow_irregularity, 0.0..=1.0)
                 .text("Flow Irregularity"));
+
+                        ui.separator();
+            ui.heading("Hills & Flat Areas");
+            
+            ui.add(bevy_egui::egui::Slider::new(&mut config.hill_steepness, 0.5..=3.0)
+                .text("Hill Steepness"));
+                
+            ui.add(bevy_egui::egui::Slider::new(&mut config.terrain_roughness, 0.1..=2.0)
+                .text("Terrain Roughness"));
+            
+            ui.add(bevy_egui::egui::Slider::new(&mut config.flat_area_radius, 20.0..=200.0)
+                .text("Flat Area Radius"));
+                
+            ui.add(bevy_egui::egui::Slider::new(&mut config.flat_area_strength, 0.0..=1.0)
+                .text("Flat Area Strength"));
+                
+            ui.add(bevy_egui::egui::Slider::new(&mut config.flat_area_frequency, 0.0005..=0.01)
+                .text("Flat Area Frequency"));
             
             ui.separator();
             ui.heading("Generation");
