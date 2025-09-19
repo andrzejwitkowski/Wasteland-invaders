@@ -3,16 +3,17 @@ mod terrain;
 mod riverbank;
 mod heightmapgenerator;
 mod flyby;
+mod heightmap_material;
 
 use bevy::prelude::*;
 use bevy_blendy_cameras::BlendyCamerasPlugin;
 use bevy_blendy_cameras::FlyCameraController;
 use bevy_blendy_cameras::OrbitCameraController;
 use bevy_egui::EguiPlugin;
-use heightmapgenerator::{HeightmapGeneratorPlugin, HeightmapRendererPlugin};
-
 use crate::flyby::FlyByPlugin;
 use crate::flyby::RiverRaidCamera;
+use crate::heightmap_material::GpuHeightmapRendererPlugin;
+use crate::heightmap_material::GpuHeightmapTerrainPlugin;
 // Import the component instead
 use crate::rendering::ComplexWaterPlugin;
 
@@ -37,10 +38,12 @@ fn main() {
             camera_controls,
         ))
         .add_plugins(ComplexWaterPlugin)
-        .add_plugins(HeightmapGeneratorPlugin)
-        .add_plugins(HeightmapRendererPlugin)
+        // .add_plugins(HeightmapGeneratorPlugin)
+        // .add_plugins(HeightmapRendererPlugin)
+        .add_plugins(GpuHeightmapTerrainPlugin)
+        .add_plugins(GpuHeightmapRendererPlugin)
         .add_plugins(BlendyCamerasPlugin)
-        .add_plugins(FlyByPlugin)
+        // .add_plugins(FlyByPlugin)
         .run();
 }
 

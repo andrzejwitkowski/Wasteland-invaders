@@ -264,7 +264,6 @@ fn create_terrain_mesh_from_heightmap(
                 // Store BASE terrain height (riverbed) WITHOUT offset
                 water_areas.push(WaterArea {
                     position: Vec3::new(world_x, terrain_height, world_z), // Just riverbed height
-                    size: world_size / width as f32,
                 });
             }
         }
@@ -349,7 +348,6 @@ fn calculate_normal_from_vertices(
 #[derive(Clone)]
 struct WaterArea {
     position: Vec3,
-    size: f32,
 }
 
 fn create_water_mesh_from_areas(
