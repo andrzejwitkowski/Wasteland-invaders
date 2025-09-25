@@ -2,22 +2,27 @@ use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
 
-use crate::heightmap_material::gpu_heightmap_terrain::{CompleteGpuHeightmapMaterial, GpuHeightmapMaterial};
+use crate::heightmap_material::{CompleteGpuHeightmapMaterial, GpuHeightmapMaterial};
+use crate::rendering::complex_water::CompleteComplexWaterMaterial;
 
 #[derive(Component)]
 pub struct GpuHeightmapTerrain;
 
-#[derive(Resource)]
+#[derive(Component)]
+pub struct GpuHeightmapWater;
+
+#[derive(Resource, Clone)]
 pub struct GpuHeightmapRenderConfig {
     pub chunk_size: f32,
     pub vertex_density: usize,
     pub live_update: bool,
+    pub water_level_offset: f32,
+    pub enable_water_rendering: bool,
 }
 
 #[derive(Resource, Default)]
-struct PreviousMeshConfig {
-    chunk_size: f32,
-    vertex_density: usize,
+pub struct LastWaterLevelOffset {
+    offset: f32,
 }
 
 #[derive(Resource, Default)]
@@ -29,12 +34,13 @@ impl Default for GpuHeightmapRenderConfig {
     fn default() -> Self {
         Self {
             chunk_size: 512.0,
-            vertex_density: 257, // Good balance of detail and performance
+            vertex_density: 257,
             live_update: true,
+            water_level_offset: 0.5,
+            enable_water_rendering: true,
         }
     }
 }
-
 pub struct GpuHeightmapRendererPlugin;
 
 impl Plugin for GpuHeightmapRendererPlugin {
@@ -42,10 +48,10 @@ impl Plugin for GpuHeightmapRendererPlugin {
         app
             .init_resource::<GpuHeightmapRenderConfig>()
             .init_resource::<GpuTerrainState>()
-            .init_resource::<PreviousMeshConfig>()
+            .init_resource::<LastWaterLevelOffset>()
             .add_systems(Update, (
                 gpu_heightmap_render_ui,
-                // auto_update_gpu_terrain,
+                update_water_level_on_change,
             ));
     }
 }
@@ -55,8 +61,10 @@ pub fn gpu_heightmap_render_ui(
     mut render_config: ResMut<GpuHeightmapRenderConfig>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut gpu_materials: ResMut<Assets<CompleteGpuHeightmapMaterial>>,
+    mut terrain_materials: ResMut<Assets<CompleteGpuHeightmapMaterial>>,
+    mut water_materials: ResMut<Assets<CompleteComplexWaterMaterial>>,
     terrain_query: Query<Entity, With<GpuHeightmapTerrain>>,
+    water_query: Query<Entity, With<GpuHeightmapWater>>,
     terrain_state: Res<GpuTerrainState>,
 ) {
     bevy_egui::egui::Window::new("GPU Heightmap Renderer")
@@ -67,12 +75,19 @@ pub fn gpu_heightmap_render_ui(
             ui.add(bevy_egui::egui::Slider::new(&mut render_config.vertex_density, 64..=513)
                 .text("Vertex Density")
                 .step_by(32.0));
+
+            ui.separator();
                 
             ui.add(bevy_egui::egui::Slider::new(&mut render_config.chunk_size, 100.0..=1000.0)
                 .text("Chunk Size")
                 .step_by(10.0));
                 
             ui.checkbox(&mut render_config.live_update, "Live Update");
+
+            ui.add(bevy_egui::egui::Slider::new(&mut render_config.water_level_offset, -150.0..=15.0)
+                .text("Water Level Offset"));
+                
+            ui.checkbox(&mut render_config.enable_water_rendering, "Render Water");
             
             ui.separator();
             
@@ -80,14 +95,16 @@ pub fn gpu_heightmap_render_ui(
                 render_gpu_terrain(
                     &mut commands,
                     &mut meshes,
-                    &mut gpu_materials,
+                    &mut terrain_materials,
+                    &mut water_materials,
                     &render_config,
                     &terrain_query,
+                    &water_query,
                 );
             }
             
             if ui.button("Clear GPU Terrain").clicked() {
-                clear_gpu_terrain(&mut commands, &terrain_query);
+                clear_gpu_terrain(&mut commands, &terrain_query, &water_query);
             }
             
             if terrain_state.terrain_entity.is_some() {
@@ -102,46 +119,162 @@ pub fn gpu_heightmap_render_ui(
 fn render_gpu_terrain(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
-    gpu_materials: &mut ResMut<Assets<CompleteGpuHeightmapMaterial>>,
+    terrain_materials: &mut ResMut<Assets<CompleteGpuHeightmapMaterial>>,
+    water_materials: &mut ResMut<Assets<CompleteComplexWaterMaterial>>,
     render_config: &GpuHeightmapRenderConfig,
     terrain_query: &Query<Entity, With<GpuHeightmapTerrain>>,
+    water_query: &Query<Entity, With<GpuHeightmapWater>>,
 ) {
     // Clear existing terrain first
-    clear_gpu_terrain(commands, terrain_query);
+    clear_gpu_terrain(commands, terrain_query, water_query);
     
-    info!("Generating GPU-based 3D terrain using heightmap shader...");
-    
-    // Create a simple plane mesh that will be deformed by the vertex shader
+    info!("Generating GPU-based 3D terrain using stencil buffer approach...");
+
     let terrain_mesh = create_gpu_terrain_plane_mesh(render_config);
-    let terrain_mesh_handle = meshes.add(terrain_mesh);
+
+    let main_terrain_entity = commands.spawn((Name::new("Main Terrain"),)).id();
     
-    // Create GPU heightmap material
-    let gpu_material = CompleteGpuHeightmapMaterial {
+    setup_terrain(
+        commands,
+        meshes,
+        terrain_materials,
+        render_config,
+        &terrain_mesh,
+    );
+    
+    if render_config.enable_water_rendering {
+        setup_water(
+            commands,
+            meshes,
+            water_materials,
+            render_config,
+        );
+    }
+
+    commands.insert_resource(GpuTerrainState {
+        terrain_entity: Some(main_terrain_entity),
+    });
+
+    info!("GPU terrain rendered successfully with stencil buffer approach!");
+}
+
+fn setup_terrain(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<CompleteGpuHeightmapMaterial>>,
+    render_config: &GpuHeightmapRenderConfig,
+    terrain_mesh: &Mesh,
+) {
+    let material = CompleteGpuHeightmapMaterial {
         base: StandardMaterial {
-            base_color: Color::srgb(0.6, 0.5, 0.4),
             perceptual_roughness: 0.8,
             metallic: 0.1,
             reflectance: 0.3,
-            ..default()
+            ..Default::default()
         },
         extension: GpuHeightmapMaterial::default(),
     };
-    
-    // Spawn terrain entity with GPU heightmap material
-    let terrain_entity = commands.spawn((
-        Mesh3d(terrain_mesh_handle),
-        MeshMaterial3d(gpu_materials.add(gpu_material)),
+
+    commands.spawn((
+        Mesh3d(meshes.add(terrain_mesh.clone())),
+        MeshMaterial3d(materials.add(material)),
         Transform::from_xyz(0.0, 0.0, 0.0)
             .with_scale(Vec3::new(render_config.chunk_size, 1.0, render_config.chunk_size)),
         GpuHeightmapTerrain,
-    )).id();
+    ));
+}
+
+fn setup_water(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    water_materials: &mut ResMut<Assets<CompleteComplexWaterMaterial>>,
+    config: &GpuHeightmapRenderConfig,
+) {
+    let water_mesh = create_water_plane_mesh(config);
     
-    // Store the terrain entity for live updates
-    commands.insert_resource(GpuTerrainState {
-        terrain_entity: Some(terrain_entity),
-    });
+    let water_material = CompleteComplexWaterMaterial::default();
+
+    commands.spawn((
+        Mesh3d(meshes.add(water_mesh)),
+        MeshMaterial3d(water_materials.add(water_material)),
+        Transform::from_xyz(0.0, config.water_level_offset, 0.0),
+        GpuHeightmapWater,
+    ));
+}
+
+fn create_water_plane_mesh(render_config: &GpuHeightmapRenderConfig) -> Mesh {
+    let half_size = render_config.chunk_size * 0.5;
     
-    info!("GPU terrain rendered successfully! Using vertex shader for real-time height displacement.");
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![
+        [-half_size, 0.0, -half_size],
+        [half_size, 0.0, -half_size],
+        [half_size, 0.0, half_size],
+        [-half_size, 0.0, half_size],
+    ]);
+    
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![
+        [0.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+    ]);
+    
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, vec![
+        [0.0, 0.0],
+        [1.0, 0.0],
+        [1.0, 1.0],
+        [0.0, 1.0],
+    ]);
+    
+    mesh.insert_indices(Indices::U32(vec![0, 2, 1, 0, 3, 2]));
+    
+    mesh
+}
+
+fn create_water_when_terrain_ready(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<CompleteComplexWaterMaterial>>,
+    config: Res<GpuHeightmapRenderConfig>,
+    terrain_state: Res<GpuTerrainState>,
+    existing_water: Query<Entity, With<GpuHeightmapWater>>,
+    mut last_terrain_entity: Local<Option<Entity>>,
+) {
+    // Only proceed if terrain exists
+    let Some(terrain_entity) = terrain_state.terrain_entity else { 
+        return; 
+    };
+    
+    // Check if terrain changed (new terrain created)
+    let terrain_changed = *last_terrain_entity != Some(terrain_entity);
+    if terrain_changed {
+        // Delete old water when terrain changes
+        for water_entity in existing_water.iter() {
+            commands.entity(water_entity).despawn();
+        }
+        *last_terrain_entity = Some(terrain_entity);
+        return; // Wait for next frame
+    }
+    
+    // Don't create water if it already exists or water rendering is disabled
+    if !existing_water.is_empty() || !config.enable_water_rendering {
+        return;
+    }
+
+    // Create water with stencil testing
+    setup_water(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &config,
+    );
+
+    info!("✅ Water created with stencil buffer approach!");
 }
 
 fn create_gpu_terrain_plane_mesh(render_config: &GpuHeightmapRenderConfig) -> Mesh {
@@ -197,11 +330,16 @@ fn create_gpu_terrain_plane_mesh(render_config: &GpuHeightmapRenderConfig) -> Me
 fn clear_gpu_terrain(
     commands: &mut Commands,
     terrain_query: &Query<Entity, With<GpuHeightmapTerrain>>,
+    water_query: &Query<Entity, With<GpuHeightmapWater>>,
 ) {
     for entity in terrain_query.iter() {
         commands.entity(entity).despawn_recursive();
     }
-    
+
+    for entity in water_query.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+
     commands.insert_resource(GpuTerrainState {
         terrain_entity: None,
     });
@@ -209,31 +347,33 @@ fn clear_gpu_terrain(
     info!("GPU terrain cleared.");
 }
 
-fn auto_update_gpu_terrain(
+fn create_empty_mesh() -> Mesh {
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<[f32; 3]>::new());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, Vec::<[f32; 3]>::new());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, Vec::<[f32; 2]>::new());
+    mesh.insert_indices(Indices::U32(Vec::new()));
+    mesh
+}
+
+fn update_water_level_on_change(
     render_config: Res<GpuHeightmapRenderConfig>,
-    previous_config: Res<PreviousMeshConfig>,
-    terrain_state: Res<GpuTerrainState>,
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut gpu_materials: ResMut<Assets<CompleteGpuHeightmapMaterial>>,
-    terrain_query: Query<Entity, With<GpuHeightmapTerrain>>,
+    mut last_offset: ResMut<LastWaterLevelOffset>,
+    mut water_query: Query<&mut Transform, With<GpuHeightmapWater>>,
 ) {
-    if !render_config.live_update || terrain_state.terrain_entity.is_none() {
-        return;
-    }
+    let offset_diff = (render_config.water_level_offset - last_offset.offset).abs();
     
-    // Check if mesh-relevant parameters actually changed
-    let mesh_changed = render_config.chunk_size != previous_config.chunk_size ||
-                      render_config.vertex_density != previous_config.vertex_density;
-    
-    if mesh_changed {
-        info!("GPU terrain configuration changed - regenerating terrain...");
-        render_gpu_terrain(
-            &mut commands,
-            &mut meshes,
-            &mut gpu_materials,
-            &render_config,
-            &terrain_query,
-        );
+    if offset_diff > 0.01 && !water_query.is_empty() {
+        info!("🌊 Updating water level from {:.2} to {:.2}", 
+              last_offset.offset, render_config.water_level_offset);
+        
+        for mut transform in water_query.iter_mut() {
+            transform.translation.y = render_config.water_level_offset;
+        }
+        
+        last_offset.offset = render_config.water_level_offset;
     }
 }

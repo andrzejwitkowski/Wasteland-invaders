@@ -162,6 +162,27 @@ fn get_noise_wave_normal(pos: vec2<f32>, time: f32) -> vec3<f32> {
     return normalize(cross(tangent_x, tangent_z));
 }
 
+fn calculate_wave_height(pos: vec2<f32>, time: f32) -> f32 {
+    let wave_params = water_material.wave_params;
+    let amplitude = wave_params.x;
+    let frequency = wave_params.y;
+    let speed = wave_params.z;
+    let steepness = wave_params.w;
+    
+    // Use simplex noise for more organic waves
+    let noise_pos1 = pos * frequency * 0.1 + vec2<f32>(time * speed * 0.3, time * speed * 0.2);
+    let noise_pos2 = pos * frequency * 0.05 + vec2<f32>(time * speed * 0.1, time * speed * 0.4);
+    
+    // Multiple layers of noise for more complex waves
+    let wave1 = simplex2d(noise_pos1) * amplitude;
+    let wave2 = simplex2d(noise_pos2) * amplitude * 0.5;
+    
+    // Add some directional waves for more realism
+    let directional_wave = sin(pos.x * frequency * 0.02 + time * speed) * amplitude * 0.3;
+    
+    return (wave1 + wave2 + directional_wave) * 0.5;
+}
+
 @vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
@@ -174,18 +195,10 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let initial_world_pos = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(vertex.position, 1.0));
 
     let time = water_material.misc_params.w;
-    let wave = get_noise_wave(initial_world_pos.xz, time);
+    let wave_height = calculate_wave_height(initial_world_pos.xz, time);
 
-    // FIXED: Apply the wave displacement properly
     var displaced_world_pos = initial_world_pos;
-    
-    // Add wave displacement to create water surface animation
-    let wave_displacement = wave.y * 0.1; // Scale down the wave height for subtle movement
-    displaced_world_pos.y = initial_world_pos.y + wave_displacement;
-    
-    // Also apply horizontal displacement for more realistic water motion
-    displaced_world_pos.x = wave.x;
-    displaced_world_pos.z = wave.z;
+    displaced_world_pos.y = initial_world_pos.y + wave_height * 2.0;
 
     // Calculate wave normal for better lighting
     let wave_normal = get_noise_wave_normal(initial_world_pos.xz, time);
@@ -194,7 +207,6 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.position = position_world_to_clip(displaced_world_pos.xyz);
     out.world_position = displaced_world_pos;
     out.world_normal = wave_normal;
-
     out.uv = vertex.uv;
     
     // Use the correct function for tangent transformation.
@@ -272,36 +284,36 @@ fn get_noise_foam_factor(world_pos: vec3<f32>, wave_height: f32, time: f32) -> f
     return min(1.0, foam_from_waves + foam_mask);
 }
 
-fn calculate_wave_height(pos: vec2<f32>, time: f32) -> f32 {
-    let wave_params = water_material.wave_params;
-    let amplitude = wave_params.x;
-    let frequency = wave_params.y;
-    let speed = wave_params.z;
-    let steepness = wave_params.w;
+// fn calculate_wave_height(pos: vec2<f32>, time: f32) -> f32 {
+//     let wave_params = water_material.wave_params;
+//     let amplitude = wave_params.x;
+//     let frequency = wave_params.y;
+//     let speed = wave_params.z;
+//     let steepness = wave_params.w;
     
-    // Apply steepness to create sharper wave peaks
-    // Higher steepness = more pointed/sharp waves
-    // Lower steepness = more rounded/smooth waves
+//     // Apply steepness to create sharper wave peaks
+//     // Higher steepness = more pointed/sharp waves
+//     // Lower steepness = more rounded/smooth waves
     
-    let base_freq = frequency + steepness * 0.5;
-    let wave_sharpness = 1.0 + steepness * 2.0;
+//     let base_freq = frequency + steepness * 0.5;
+//     let wave_sharpness = 1.0 + steepness * 2.0;
     
-    // Multiple wave layers with steepness applied
-    let wave1 = pow(abs(sin((pos.x * base_freq + time * speed) * 2.0)), wave_sharpness) * 
-                sign(sin((pos.x * base_freq + time * speed) * 2.0)) * amplitude;
+//     // Multiple wave layers with steepness applied
+//     let wave1 = pow(abs(sin((pos.x * base_freq + time * speed) * 2.0)), wave_sharpness) * 
+//                 sign(sin((pos.x * base_freq + time * speed) * 2.0)) * amplitude;
     
-    let wave2 = pow(abs(sin((pos.y * base_freq * 0.8 + time * speed * 0.7) * 2.0)), wave_sharpness) * 
-                sign(sin((pos.y * base_freq * 0.8 + time * speed * 0.7) * 2.0)) * amplitude * 0.7;
+//     let wave2 = pow(abs(sin((pos.y * base_freq * 0.8 + time * speed * 0.7) * 2.0)), wave_sharpness) * 
+//                 sign(sin((pos.y * base_freq * 0.8 + time * speed * 0.7) * 2.0)) * amplitude * 0.7;
     
-    let wave3 = pow(abs(sin(((pos.x + pos.y) * base_freq * 1.2 + time * speed * 1.1) * 2.0)), wave_sharpness) * 
-                sign(sin(((pos.x + pos.y) * base_freq * 1.2 + time * speed * 1.1) * 2.0)) * amplitude * 0.5;
+//     let wave3 = pow(abs(sin(((pos.x + pos.y) * base_freq * 1.2 + time * speed * 1.1) * 2.0)), wave_sharpness) * 
+//                 sign(sin(((pos.x + pos.y) * base_freq * 1.2 + time * speed * 1.1) * 2.0)) * amplitude * 0.5;
     
-    // Add some noise for more organic movement (also affected by steepness)
-    let noise_pos = pos * (0.1 + steepness * 0.05) + time * 0.1;
-    let noise_wave = simplex2d(noise_pos) * amplitude * 0.3;
+//     // Add some noise for more organic movement (also affected by steepness)
+//     let noise_pos = pos * (0.1 + steepness * 0.05) + time * 0.1;
+//     let noise_wave = simplex2d(noise_pos) * amplitude * 0.3;
     
-    return wave1 + wave2 + wave3 + noise_wave;
-}
+//     return wave1 + wave2 + wave3 + noise_wave;
+// }
 
 
 @fragment

@@ -1,8 +1,5 @@
 use bevy::{
-    pbr::{ExtendedMaterial, MaterialExtension},
-    prelude::*,
-    reflect::Reflect,
-    render::render_resource::{AsBindGroup, ShaderRef},
+    pbr::{ExtendedMaterial, MaterialExtension}, prelude::*, reflect::Reflect, render::render_resource::{AsBindGroup, ShaderRef}
 };
 use bevy_egui::{egui, EguiContexts};
 
@@ -28,6 +25,10 @@ pub struct GpuHeightmapMaterial {
     // .x = river_start_x, .y = river_start_y, .z = river_dir_x, .w = river_dir_y
     #[uniform(100)]
     pub river_position: Vec4,
+
+    // .x = octaves, .y = lacunarity, .z = persistence, .w = seed
+    #[uniform(100)]
+    pub noise_config: Vec4,
 }
 
 #[derive(Resource)]
@@ -61,6 +62,12 @@ pub struct GpuHeightmapConfigUI {
     pub river_start_y: f32,
     pub river_dir_x: f32,
     pub river_dir_y: f32,
+
+    // Noise settings
+    pub noise_octaves: i32,
+    pub noise_lacunarity: f32,
+    pub noise_persistence: f32,
+    pub noise_seed: f32,
 }
 
 impl Default for GpuHeightmapMaterial {
@@ -70,7 +77,8 @@ impl Default for GpuHeightmapMaterial {
             river_params: Vec4::new(20.0, 80.0, 0.008, 40.0),
             erosion_params: Vec4::new(0.8, 120.0, 0.7, 0.6),
             terrain_features: Vec4::new(100.0, 0.8, 1.2, 0.5),
-            river_position: Vec4::new(-256.0, 0.0, 1.0, 0.1),
+            river_position: Vec4::new(0.0, -200.0, 1.0, 0.2),
+            noise_config: Vec4::new(6.0, 2.5, 0.5, 0.0),
         }
     }
 }
@@ -98,17 +106,21 @@ impl Default for GpuHeightmapConfigUI {
             river_start_y: 0.0,
             river_dir_x: 1.0,
             river_dir_y: 0.1,
+            noise_octaves: 6,
+            noise_lacunarity: 2.5,
+            noise_persistence: 0.5,
+            noise_seed: 0.0,
         }
     }
 }
 
 impl MaterialExtension for GpuHeightmapMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/heightmap_terrain.wgsl".into()
+        "shaders/heightmap_terrain_2.wgsl".into()
     }
     
     fn vertex_shader() -> ShaderRef {
-        "shaders/heightmap_terrain.wgsl".into()
+        "shaders/heightmap_terrain_2.wgsl".into()
     }
 }
 
@@ -136,6 +148,23 @@ fn gpu_heightmap_ui_system(
     egui::Window::new("GPU Heightmap Controls")
         .default_width(350.0)
         .show(contexts.ctx_mut(), |ui| {
+
+            ui.heading("Noise Settings");
+
+            ui.add(egui::Slider::new(&mut config.noise_octaves, 1..=10)
+                .text("Octaves"));
+
+            ui.add(egui::Slider::new(&mut config.noise_lacunarity, 0.1..=2.0)
+                .text("Lacunarity"));
+
+            ui.add(egui::Slider::new(&mut config.noise_persistence, 0.0..=1.0)
+                .text("Persistence"));
+
+            ui.add(egui::Slider::new(&mut config.noise_seed, 0.0..=1000.0)
+                .text("Seed"));
+
+            ui.separator();
+
             ui.heading("GPU Terrain Parameters");
             
             ui.add(egui::Slider::new(&mut config.terrain_scale, 0.001..=0.02)
@@ -249,6 +278,14 @@ fn update_all_gpu_heightmap_materials(
                 config.river_dir_x,
                 config.river_dir_y,
             );
+
+            material.extension.noise_config = Vec4::new(
+                config.noise_octaves as f32,
+                config.noise_lacunarity,
+                config.noise_persistence,
+                config.noise_seed,
+            );
         }
     }
 }
+

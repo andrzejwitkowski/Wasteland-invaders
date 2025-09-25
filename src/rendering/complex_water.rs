@@ -1,7 +1,7 @@
 use bevy::{
     pbr::{ExtendedMaterial, MaterialExtension},
     prelude::*,
-    reflect::{Reflect},
+    reflect::Reflect,
     render::render_resource::{AsBindGroup, ShaderRef},
 };
 use bevy_egui::{egui, EguiContexts};
@@ -72,7 +72,7 @@ impl WaterConfigUI {
 impl Default for ComplexWaterMaterial {
     fn default() -> Self {
         Self {
-            wave_params: Vec4::new(10.0, 0.5, 0.5, 4.0), // amplitude, frequency, speed, steepness
+            wave_params: Vec4::new(3.0, 0.3, 1.0, 4.0), // amplitude, frequency, speed, steepness
             misc_params: Vec4::new(0.8, 0.3, 0.7, 0.0), // foam_intensity, foam_cutoff, transparency, time
         }
     }
@@ -82,9 +82,9 @@ impl Default for WaterConfigUI {
     fn default() -> Self {
         Self {
             // Good starting values for realistic water
-            wave_amplitude: 1.0,
+            wave_amplitude: 3.0,
             wave_frequency: 0.3,
-            wave_speed: 0.8,
+            wave_speed: 1.0,
             wave_steepness: 3.0,
             foam_intensity: 1.0,
             foam_cutoff: 0.7,
