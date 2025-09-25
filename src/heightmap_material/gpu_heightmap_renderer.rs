@@ -203,79 +203,88 @@ fn setup_water(
 }
 
 fn create_water_plane_mesh(render_config: &GpuHeightmapRenderConfig) -> Mesh {
-    let half_size = render_config.chunk_size * 0.5;
+    let width = render_config.vertex_density;
+    let height = render_config.vertex_density;
+    
+    let mut vertices = Vec::new();
+    let mut normals = Vec::new();
+    let mut uvs = Vec::new();
+    let mut indices = Vec::new();
+    
+    // Create a dense plane for detailed wave displacement
+    for z in 0..height {
+        for x in 0..width {
+            let u = x as f32 / (width - 1) as f32;
+            let v = z as f32 / (height - 1) as f32;
+            
+            // Create vertices in world space
+            let x_pos = (u - 0.5) * render_config.chunk_size;
+            let z_pos = (v - 0.5) * render_config.chunk_size;
+            
+            vertices.push([x_pos, 0.0, z_pos]);
+            normals.push([0.0, 1.0, 0.0]);
+            uvs.push([u * 10.0, v * 10.0]); // Scale UVs for better texture mapping
+        }
+    }
+    
+    // Generate indices for triangles
+    for z in 0..(height - 1) {
+        for x in 0..(width - 1) {
+            let i = (z * width + x) as u32;
+            
+            // Two triangles per quad
+            indices.extend_from_slice(&[
+                i, i + width as u32, i + 1,
+                i + 1, i + width as u32, i + width as u32 + 1,
+            ]);
+        }
+    }
     
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::RENDER_WORLD,
     );
-    
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![
-        [-half_size, 0.0, -half_size],
-        [half_size, 0.0, -half_size],
-        [half_size, 0.0, half_size],
-        [-half_size, 0.0, half_size],
-    ]);
-    
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![
-        [0.0, 1.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 1.0, 0.0],
-    ]);
-    
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, vec![
-        [0.0, 0.0],
-        [1.0, 0.0],
-        [1.0, 1.0],
-        [0.0, 1.0],
-    ]);
-    
-    mesh.insert_indices(Indices::U32(vec![0, 2, 1, 0, 3, 2]));
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_indices(Indices::U32(indices));
     
     mesh
 }
 
-fn create_water_when_terrain_ready(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<CompleteComplexWaterMaterial>>,
-    config: Res<GpuHeightmapRenderConfig>,
-    terrain_state: Res<GpuTerrainState>,
-    existing_water: Query<Entity, With<GpuHeightmapWater>>,
-    mut last_terrain_entity: Local<Option<Entity>>,
-) {
-    // Only proceed if terrain exists
-    let Some(terrain_entity) = terrain_state.terrain_entity else { 
-        return; 
-    };
+// fn create_water_plane_mesh(render_config: &GpuHeightmapRenderConfig) -> Mesh {
+//     let half_size = render_config.chunk_size * 0.5;
     
-    // Check if terrain changed (new terrain created)
-    let terrain_changed = *last_terrain_entity != Some(terrain_entity);
-    if terrain_changed {
-        // Delete old water when terrain changes
-        for water_entity in existing_water.iter() {
-            commands.entity(water_entity).despawn();
-        }
-        *last_terrain_entity = Some(terrain_entity);
-        return; // Wait for next frame
-    }
+//     let mut mesh = Mesh::new(
+//         PrimitiveTopology::TriangleList,
+//         RenderAssetUsages::RENDER_WORLD,
+//     );
     
-    // Don't create water if it already exists or water rendering is disabled
-    if !existing_water.is_empty() || !config.enable_water_rendering {
-        return;
-    }
-
-    // Create water with stencil testing
-    setup_water(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        &config,
-    );
-
-    info!("✅ Water created with stencil buffer approach!");
-}
+//     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![
+//         [-half_size, 0.0, -half_size],
+//         [half_size, 0.0, -half_size],
+//         [half_size, 0.0, half_size],
+//         [-half_size, 0.0, half_size],
+//     ]);
+    
+//     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![
+//         [0.0, 1.0, 0.0],
+//         [0.0, 1.0, 0.0],
+//         [0.0, 1.0, 0.0],
+//         [0.0, 1.0, 0.0],
+//     ]);
+    
+//     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, vec![
+//         [0.0, 0.0],
+//         [1.0, 0.0],
+//         [1.0, 1.0],
+//         [0.0, 1.0],
+//     ]);
+    
+//     mesh.insert_indices(Indices::U32(vec![0, 2, 1, 0, 3, 2]));
+    
+//     mesh
+// }
 
 fn create_gpu_terrain_plane_mesh(render_config: &GpuHeightmapRenderConfig) -> Mesh {
     let width = render_config.vertex_density;
@@ -345,18 +354,6 @@ fn clear_gpu_terrain(
     });
     
     info!("GPU terrain cleared.");
-}
-
-fn create_empty_mesh() -> Mesh {
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::RENDER_WORLD,
-    );
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<[f32; 3]>::new());
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, Vec::<[f32; 3]>::new());
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, Vec::<[f32; 2]>::new());
-    mesh.insert_indices(Indices::U32(Vec::new()));
-    mesh
 }
 
 fn update_water_level_on_change(

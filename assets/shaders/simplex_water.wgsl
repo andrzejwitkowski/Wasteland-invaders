@@ -186,8 +186,7 @@ fn calculate_wave_height(pos: vec2<f32>, time: f32) -> f32 {
 @vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
-    var displaced_position = vertex.position;
-
+    
     // Get the world matrix using the helper function.
     let world_from_local = mesh_functions::get_world_from_local(vertex.instance_index);
     
@@ -195,15 +194,20 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let initial_world_pos = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(vertex.position, 1.0));
 
     let time = water_material.misc_params.w;
-    let wave_height = calculate_wave_height(initial_world_pos.xz, time);
-
+    
+    // FIXED: Properly use the wave displacement function
+    let wave_displacement = get_noise_wave(initial_world_pos.xz, time);
+    
+    // Apply wave displacement to create visible waves
     var displaced_world_pos = initial_world_pos;
-    displaced_world_pos.y = initial_world_pos.y + wave_height * 2.0;
-
+    displaced_world_pos.y = initial_world_pos.y + wave_displacement.y; // Use the actual wave height
+    displaced_world_pos.x = wave_displacement.x;
+    displaced_world_pos.y = wave_displacement.y; // Apply horizontal displacement for realism
+    
     // Calculate wave normal for better lighting
     let wave_normal = get_noise_wave_normal(initial_world_pos.xz, time);
     
-    // Populate the VertexOutput struct according to the official definition.
+    // Populate the VertexOutput struct
     out.position = position_world_to_clip(displaced_world_pos.xyz);
     out.world_position = displaced_world_pos;
     out.world_normal = wave_normal;
