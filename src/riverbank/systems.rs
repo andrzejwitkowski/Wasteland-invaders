@@ -39,7 +39,7 @@ pub fn river_config_ui(
 ) {
     egui::Window::new("River Bank Controls")
         .default_width(300.0)
-        .show(contexts.ctx_mut(), |ui| {
+        .show(contexts.ctx_mut().unwrap(), |ui| {
             ui.heading("River Properties");
             
             let mut changed = false;

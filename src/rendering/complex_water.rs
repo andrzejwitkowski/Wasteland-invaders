@@ -1,11 +1,9 @@
 use bevy::{
-    pbr::{ExtendedMaterial, MaterialExtension},
-    prelude::*,
-    reflect::Reflect,
-    render::render_resource::{AsBindGroup, ShaderRef},
+    ecs::query::QuerySingleError, pbr::{ExtendedMaterial, MaterialExtension}, prelude::*, reflect::Reflect, render::render_resource::{AsBindGroup, ShaderRef}
 };
-use bevy_egui::{egui, EguiContexts};
+use bevy_egui::{egui, EguiContexts, EguiPrimaryContextPass};
 use bevy::prelude::AlphaMode;
+use rand::rand_core::le;
 
 use crate::rendering::caustic_floor_material::CompleteCausticFloorMaterial;
 
@@ -126,10 +124,10 @@ impl Plugin for ComplexWaterPlugin {
                 update_caustic_time, // Add this
             ))
             .init_resource::<WaterConfigUI>()
+            .add_systems(EguiPrimaryContextPass, water_ui_system)
             .add_systems(Update, (
-                water_ui_system,
                 update_all_water_materials,
-                update_all_caustic_materials, // Add this
+                update_all_caustic_materials,
             ));
     }
 }
@@ -148,10 +146,13 @@ pub fn update_water_time(
 fn water_ui_system(
     mut contexts: EguiContexts,
     mut config: ResMut<WaterConfigUI>,
-) {
+) -> Result<(), BevyError> {
+    // return fast when contexts.ctx_mut() is None
+    let ctx = contexts.ctx_mut()?;
+
     egui::Window::new("Water Controls")
         .default_width(300.0)
-        .show(contexts.ctx_mut(), |ui| {
+        .show(ctx, |ui| {
             ui.heading("Wave Parameters");
             
             ui.add(egui::Slider::new(&mut config.wave_amplitude, 0.0..=5.0)
@@ -291,6 +292,8 @@ fn water_ui_system(
                     config.foam_intensity, config.foam_cutoff, config.transparency));
             });
         });
+
+        Ok(())
 }
 
 fn update_all_water_materials(

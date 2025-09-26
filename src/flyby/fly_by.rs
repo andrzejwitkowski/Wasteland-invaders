@@ -177,7 +177,7 @@ fn flyby_ui_system(
 ) {
     egui::Window::new("🎮 River Raid Flyby")
         .default_width(320.0)
-        .show(contexts.ctx_mut(), |ui| {
+        .show(contexts.ctx_mut().unwrap(), |ui| {
             ui.heading("Camera Control");
             
             let has_terrain = !terrain_query.is_empty();

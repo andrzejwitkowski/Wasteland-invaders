@@ -202,7 +202,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     var displaced_world_pos = initial_world_pos;
     displaced_world_pos.y = initial_world_pos.y + wave_displacement.y; // Use the actual wave height
     displaced_world_pos.x = wave_displacement.x;
-    displaced_world_pos.y = wave_displacement.y; // Apply horizontal displacement for realism
+    displaced_world_pos.y += wave_displacement.y;
     
     // Calculate wave normal for better lighting
     let wave_normal = get_noise_wave_normal(initial_world_pos.xz, time);

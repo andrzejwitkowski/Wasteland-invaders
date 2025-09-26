@@ -23,6 +23,7 @@ use crate::flyby::FlyByPlugin;
 use crate::flyby::RiverRaidCamera;
 use crate::heightmap_material::GpuHeightmapRendererPlugin;
 use crate::heightmap_material::GpuHeightmapTerrainPlugin;
+use crate::heightmap_material::MaskedRiverWaterPlugin;
 // Import the component instead
 use crate::rendering::ComplexWaterPlugin;
 
@@ -38,7 +39,6 @@ fn main() {
         }),
         ..default()
     }))
-    .add_plugins(EguiPlugin { enable_multipass_for_primary_context: false })
     .add_systems(Startup, (
         setup_camera_and_light,
         crate::terrain::systems::setup_terrain_materials,
@@ -46,7 +46,9 @@ fn main() {
     .add_systems(Update, (
         camera_controls,
     ))
-    .add_plugins(ComplexWaterPlugin)
+    .add_plugins(EguiPlugin::default())
+    // .add_plugins(ComplexWaterPlugin)
+    .add_plugins(MaskedRiverWaterPlugin)
     .add_plugins(GpuHeightmapTerrainPlugin)
     .add_plugins(GpuHeightmapRendererPlugin)
     .add_plugins(BlendyCamerasPlugin);
