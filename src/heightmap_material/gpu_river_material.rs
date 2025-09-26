@@ -84,7 +84,7 @@ pub struct MaskedRiverWaterConfig {
 impl Default for MaskedRiverWaterConfig {
     fn default() -> Self {
         Self {
-            wave_amplitude: 0.05,
+            wave_amplitude: 3.0,
             wave_frequency: 0.6,
             wave_speed: 0.8,
             wave_steepness: 2.0,
@@ -142,7 +142,8 @@ fn masked_river_water_ui_system(
         .default_width(320.0)
         .show(ctx, |ui| {
             ui.heading("Wave Parameters");
-            ui.add(egui::Slider::new(&mut cfg.wave_amplitude, 0.0..=1.0).text("Amplitude"));
+            ui.add(egui::Slider::new(&mut cfg.wave_amplitude, 0.0..=5.0).text("Amplitude")
+            .step_by(0.1));
             ui.add(egui::Slider::new(&mut cfg.wave_frequency, 0.05..=3.0).text("Frequency"));
             ui.add(egui::Slider::new(&mut cfg.wave_speed, 0.0..=3.0).text("Speed"));
             ui.add(egui::Slider::new(&mut cfg.wave_steepness, 1.0..=10.0).text("Steepness"));
