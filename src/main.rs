@@ -3,45 +3,55 @@ mod terrain;
 mod riverbank;
 mod heightmapgenerator;
 mod flyby;
+mod heightmap_material;
 
+use bevy::core_pipeline::core_3d::Camera3dDepthTextureUsage;
+use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::prelude::*;
+use bevy::render::camera::ScalingMode;
+use bevy::render::camera::Viewport;
+use bevy::render::render_resource::TextureFormat;
+use bevy::render::settings::RenderCreation;
+use bevy::render::settings::WgpuFeatures;
+use bevy::render::settings::WgpuSettings;
+use bevy::render::RenderPlugin;
 use bevy_blendy_cameras::BlendyCamerasPlugin;
 use bevy_blendy_cameras::FlyCameraController;
 use bevy_blendy_cameras::OrbitCameraController;
 use bevy_egui::EguiPlugin;
-use heightmapgenerator::{HeightmapGeneratorPlugin, HeightmapRendererPlugin};
-
 use crate::flyby::FlyByPlugin;
 use crate::flyby::RiverRaidCamera;
+use crate::heightmap_material::GpuHeightmapRendererPlugin;
+use crate::heightmap_material::GpuHeightmapTerrainPlugin;
 // Import the component instead
 use crate::rendering::ComplexWaterPlugin;
 
 use bevy::input::keyboard::KeyCode;
 
 fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Wasteland Invaders".to_string(),
-                resolution: (1920., 1080.).into(),
-                ..default()
-            }),
+    let mut app = App::new();
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            title: "Wasteland Invaders".to_string(),
+            resolution: (1920., 1080.).into(),
             ..default()
-        }))
-        .add_plugins(EguiPlugin { enable_multipass_for_primary_context: false })
-        .add_systems(Startup, (
-            setup_camera_and_light,
-            crate::terrain::systems::setup_terrain_materials,
-        ))
-        .add_systems(Update, (
-            camera_controls,
-        ))
-        .add_plugins(ComplexWaterPlugin)
-        .add_plugins(HeightmapGeneratorPlugin)
-        .add_plugins(HeightmapRendererPlugin)
-        .add_plugins(BlendyCamerasPlugin)
-        .add_plugins(FlyByPlugin)
-        .run();
+        }),
+        ..default()
+    }))
+    .add_plugins(EguiPlugin { enable_multipass_for_primary_context: false })
+    .add_systems(Startup, (
+        setup_camera_and_light,
+        crate::terrain::systems::setup_terrain_materials,
+    ))
+    .add_systems(Update, (
+        camera_controls,
+    ))
+    .add_plugins(ComplexWaterPlugin)
+    .add_plugins(GpuHeightmapTerrainPlugin)
+    .add_plugins(GpuHeightmapRendererPlugin)
+    .add_plugins(BlendyCamerasPlugin);
+    // .add_plugins(FlyByPlugin)
+    app.run();
 }
 
 fn camera_controls(
@@ -85,7 +95,8 @@ fn camera_controls(
 pub fn setup_camera_and_light(mut commands: Commands) {
     // Camera
     commands.spawn((
-        Camera3d::default(),
+        Camera3d::default(), // Add this
+        Camera::default(),
         Transform::from_xyz(0.0, 250.0, 50.0)
             .looking_at(Vec3::ZERO, Vec3::Y),
         OrbitCameraController {
