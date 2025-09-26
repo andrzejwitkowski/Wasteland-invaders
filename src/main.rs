@@ -47,7 +47,7 @@ fn main() {
         camera_controls,
     ))
     .add_plugins(EguiPlugin::default())
-    .add_plugins(ComplexWaterPlugin)
+    // .add_plugins(ComplexWaterPlugin)
     .add_plugins(MaskedRiverWaterPlugin)
     .add_plugins(GpuHeightmapTerrainPlugin)
     .add_plugins(GpuHeightmapRendererPlugin)

@@ -4,7 +4,7 @@ use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy_egui::EguiPrimaryContextPass;
 
-use crate::heightmap_material::{CompleteGpuHeightmapMaterial, GpuHeightmapMaterial, MaskedRiverWaterPlugin};
+use crate::heightmap_material::{CompleteGpuHeightmapMaterial, CompleteMaskedRiverWaterMaterial, GpuHeightmapMaterial, MaskedRiverWaterPlugin};
 use crate::rendering::complex_water::CompleteComplexWaterMaterial;
 
 #[derive(Component)]
@@ -64,8 +64,8 @@ pub fn gpu_heightmap_render_ui(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut terrain_materials: ResMut<Assets<CompleteGpuHeightmapMaterial>>,
-    mut water_materials: ResMut<Assets<CompleteComplexWaterMaterial>>,
-    //mut water_materials: ResMut<Assets<MaskedRiverWaterPlugin>>,
+    // mut water_materials: ResMut<Assets<CompleteComplexWaterMaterial>>,
+    mut water_materials: ResMut<Assets<CompleteMaskedRiverWaterMaterial>>,
     terrain_query: Query<Entity, With<GpuHeightmapTerrain>>,
     water_query: Query<Entity, With<GpuHeightmapWater>>,
     terrain_state: Res<GpuTerrainState>,
@@ -123,7 +123,8 @@ fn render_gpu_terrain(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     terrain_materials: &mut ResMut<Assets<CompleteGpuHeightmapMaterial>>,
-    water_materials: &mut ResMut<Assets<CompleteComplexWaterMaterial>>,
+    //water_materials: &mut ResMut<Assets<CompleteComplexWaterMaterial>>,
+    water_materials: &mut ResMut<Assets<CompleteMaskedRiverWaterMaterial>>,
     render_config: &GpuHeightmapRenderConfig,
     terrain_query: &Query<Entity, With<GpuHeightmapTerrain>>,
     water_query: &Query<Entity, With<GpuHeightmapWater>>,
@@ -190,12 +191,12 @@ fn setup_terrain(
 fn setup_water(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
-    water_materials: &mut ResMut<Assets<CompleteComplexWaterMaterial>>,
+    water_materials: &mut ResMut<Assets<CompleteMaskedRiverWaterMaterial>>,
     config: &GpuHeightmapRenderConfig,
 ) {
     let water_mesh = create_water_plane_mesh(config);
     
-    let water_material = CompleteComplexWaterMaterial::default();
+    let water_material = CompleteMaskedRiverWaterMaterial::default();
 
     commands.spawn((
         Mesh3d(meshes.add(water_mesh)),
