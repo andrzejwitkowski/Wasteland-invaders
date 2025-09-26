@@ -12,6 +12,7 @@ struct WaterMaterial {
     river_params: vec4<f32>,
     river_position: vec4<f32>,
     terrain_params: vec4<f32>,
+    debug_options: vec4<f32>, // x=show_mask, y=margin_step_world, z=bank_fill_ratio
 };
 
 @group(2) @binding(100)
@@ -34,6 +35,28 @@ fn get_meander_amp() -> f32 { return water_material.river_params.w; }
 
 fn get_river_start() -> vec2<f32> { return water_material.river_position.xy; }
 fn get_river_dir_raw() -> vec2<f32> { return water_material.river_position.zw; }
+
+fn bank_fill_ratio() -> f32 { return clamp(water_material.debug_options.z, 0.0, 1.0); }
+fn bank_slope_distance() -> f32 { return water_material.debug_options.y; }
+
+// Return (dist, along) so we can reuse along for width noise
+fn river_dist_and_along(pos: vec2<f32>) -> vec2<f32> {
+    let start = get_river_start();
+    let dir = norm2(get_river_dir_raw());
+    let rel = pos - start;
+    let along = dot(rel, dir);
+    let meander = meander_offset(along);
+    let perp = vec2(-dir.y, dir.x);
+    let center = start + dir * along + perp * meander;
+    let dist = length(pos - center);
+    return vec2(dist, along);
+}
+
+fn width_noise(along: f32) -> f32 {
+    // replicate terrain: sample_noise(distance_along_river * 0.0005, 0)
+    // We have only noise() in [0,1]; remap like terrain logic (terrain used sample_noise 0..1 then *0.3)
+    return noise(vec2(along * 0.0005, 0.0));
+}
 
 fn norm2(v: vec2<f32>) -> vec2<f32> {
     let l = sqrt(dot(v,v));
@@ -141,24 +164,47 @@ fn fresnel(cos_theta: f32, f0: f32) -> f32 {
 
 @fragment
 fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
-    let dist = river_distance(in.world_position.xz);
-    let half_width = get_river_width() * 0.5;
+    let da = river_dist_and_along(in.world_position.xz);
+    let dist = da.x;
+    let along = da.y;
 
-    if (dist > half_width) {
+    // Dynamic width variation
+    let w_noise = width_noise(along);
+    let actual_river_width = get_river_width() * (1.0 + w_noise * 0.3);
+
+    let core_half = actual_river_width * 0.5;
+
+    // Extend into banks by ratio
+    let bank_extra = bank_slope_distance() * bank_fill_ratio();
+    let effective_half = core_half + bank_extra;
+
+    // Discard outside extended region
+    if (dist > effective_half) {
         discard;
     }
 
+    // Edge alpha fade (last 3 world units)
+    let edge_fade = smoothstep(effective_half - 3.0, effective_half, dist);
+
     var pbr_input = pbr_input_from_standard_material(in, is_front);
+
     let t = get_time();
     let wave_h = wave_displacement(in.world_position.xz, t);
 
-    let base_color = vec3<f32>(0.0, 0.35, 0.65);
+    // Base color varies slightly with how far into banks you are
+    let edge_ratio = clamp(dist / effective_half, 0.0, 1.0);
+    let depth_tint = mix(0.15, 0.35, edge_ratio);
+    let base_color = vec3<f32>(0.0, depth_tint, 0.65 - 0.25 * (1.0 - edge_ratio));
+
     let foam_factor = smoothstep(get_foam_cutoff()-0.1, get_foam_cutoff()+0.1, abs(wave_h)) * get_foam_intensity();
     let foam_color = vec3<f32>(1.0,1.0,1.0);
     let color = mix(base_color, foam_color, foam_factor);
     let transparency = get_transparency();
 
-    pbr_input.material.base_color = vec4<f32>(color, mix(transparency, 1.0, foam_factor));
+    // Apply edge fade to alpha
+    let alpha = mix(transparency, 1.0, foam_factor) * (1.0 - edge_fade);
+
+    pbr_input.material.base_color = vec4<f32>(color, alpha);
     pbr_input.material.perceptual_roughness = 0.03;
     pbr_input.material.metallic = 0.0;
 
