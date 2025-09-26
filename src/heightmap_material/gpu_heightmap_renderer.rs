@@ -1,11 +1,9 @@
-use bevy::ecs::error::info;
 use bevy::{log, prelude::*};
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy_egui::EguiPrimaryContextPass;
 
-use crate::heightmap_material::{CompleteGpuHeightmapMaterial, CompleteMaskedRiverWaterMaterial, GpuHeightmapMaterial, MaskedRiverWaterPlugin};
-use crate::rendering::complex_water::CompleteComplexWaterMaterial;
+use crate::heightmap_material::{CompleteGpuHeightmapMaterial, CompleteMaskedRiverWaterMaterial, GpuHeightmapMaterial};
 
 #[derive(Component)]
 pub struct GpuHeightmapTerrain;
@@ -64,7 +62,7 @@ pub fn gpu_heightmap_render_ui(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut terrain_materials: ResMut<Assets<CompleteGpuHeightmapMaterial>>,
-    // mut water_materials: ResMut<Assets<CompleteComplexWaterMaterial>>,
+    asset_server: Res<AssetServer>,
     mut water_materials: ResMut<Assets<CompleteMaskedRiverWaterMaterial>>,
     terrain_query: Query<Entity, With<GpuHeightmapTerrain>>,
     water_query: Query<Entity, With<GpuHeightmapWater>>,
@@ -99,6 +97,7 @@ pub fn gpu_heightmap_render_ui(
                     &mut commands,
                     &mut meshes,
                     &mut terrain_materials,
+                    &asset_server,
                     &mut water_materials,
                     &render_config,
                     &terrain_query,
@@ -123,7 +122,7 @@ fn render_gpu_terrain(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     terrain_materials: &mut ResMut<Assets<CompleteGpuHeightmapMaterial>>,
-    //water_materials: &mut ResMut<Assets<CompleteComplexWaterMaterial>>,
+    asset_server: &Res<AssetServer>,
     water_materials: &mut ResMut<Assets<CompleteMaskedRiverWaterMaterial>>,
     render_config: &GpuHeightmapRenderConfig,
     terrain_query: &Query<Entity, With<GpuHeightmapTerrain>>,
@@ -142,6 +141,7 @@ fn render_gpu_terrain(
         commands,
         meshes,
         terrain_materials,
+        asset_server,
         render_config,
         &terrain_mesh,
     );
@@ -166,6 +166,7 @@ fn setup_terrain(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<CompleteGpuHeightmapMaterial>>,
+    asset_server: &Res<AssetServer>,
     render_config: &GpuHeightmapRenderConfig,
     terrain_mesh: &Mesh,
 ) {
@@ -176,7 +177,10 @@ fn setup_terrain(
             reflectance: 0.3,
             ..Default::default()
         },
-        extension: GpuHeightmapMaterial::default(),
+        extension: GpuHeightmapMaterial{
+            terrain_texture: asset_server.load("textures/terrain/rock.jpg"),
+            ..Default::default()
+        },
     };
 
     commands.spawn((

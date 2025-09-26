@@ -19,6 +19,12 @@ struct HeightmapMaterial {
     debug_options: vec4<f32>,         
 };
 
+@group(2) @binding(101)
+var terrain_texture: texture_2d<f32>;
+
+@group(2) @binding(102)
+var terrain_sampler: sampler;
+
 // Bind material data to group 2 like your water shader
 @group(2) @binding(100)
 var<uniform> heightmap_material: HeightmapMaterial;
@@ -558,8 +564,13 @@ fn fragment(
         return out_debug;
     }
     
-    // Terrain color blending
+
     var base_color: vec3<f32>;
+
+    let tiling_factor = 8.0;
+    let tex_coord = (in.world_position.xz + vec2(512.0, 512.0)) / 1024.0 * tiling_factor;
+    let tiled_coord = fract(tex_coord);
+    let terrain_tex_color = textureSample(terrain_texture, terrain_sampler, tiled_coord).rgb;
     
     if (is_river) {
         // Deep river - dark blue
@@ -568,16 +579,23 @@ fn fragment(
     else if (is_water) {
         // Shallow water - light blue
         base_color = vec3<f32>(0.3, 0.5, 0.7);
-    } else if (is_mountain) {
-        // Mountain - rocky gray
-        base_color = vec3<f32>(0.5, 0.5, 0.5);
-    } else if (is_flat) {
-        // Flat land - green grass
-        base_color = vec3<f32>(0.4, 0.6, 0.3);
-    } 
-    else {
-        // Slope - brown dirt
-        base_color = vec3<f32>(0.6, 0.5, 0.4);
+    } else {
+        let texture_strength = 0.8; // How much texture influences the color
+        
+        if (is_mountain) {
+            // Mountain - rocky gray with texture
+            let mountain_base = vec3<f32>(0.5, 0.5, 0.5);
+            base_color = mix(mountain_base, terrain_tex_color, texture_strength);
+        } else if (is_flat) {
+            // Flat land - green grass with texture
+            let grass_base = vec3<f32>(0.4, 0.6, 0.3);
+            base_color = mix(grass_base, terrain_tex_color, texture_strength);
+        } 
+        else {
+            // Slope - brown dirt with texture
+            let dirt_base = vec3<f32>(0.6, 0.5, 0.4);
+            base_color = mix(dirt_base, terrain_tex_color, texture_strength);
+        }
     }
     
     // Adjust material properties based on terrain type

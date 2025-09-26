@@ -1,5 +1,5 @@
 use bevy::{
-    ecs::error::info, log, pbr::{ExtendedMaterial, MaterialExtension}, prelude::*, reflect::Reflect, render::render_resource::{AsBindGroup, ShaderRef}
+    pbr::{ExtendedMaterial, MaterialExtension}, prelude::*, reflect::Reflect, render::render_resource::{AsBindGroup, ShaderRef}
 };
 use bevy_egui::{egui, EguiContexts, EguiPrimaryContextPass};
 
@@ -34,6 +34,10 @@ pub struct GpuHeightmapMaterial {
 
     #[uniform(100)]
     pub debug_options: Vec4,
+
+    #[texture(101)]
+    #[sampler(102)]
+    pub terrain_texture: Handle<Image>,
 }
 
 #[derive(Resource)]
@@ -89,6 +93,7 @@ impl Default for GpuHeightmapMaterial {
             river_position: Vec4::new(0.0, -200.0, 1.0, 0.2),
             noise_config: Vec4::new(6.0, 2.5, 0.5, 0.0),
             debug_options: Vec4::new(0.0, 0.0, 0.0, 0.0),
+            terrain_texture: Handle::default(),
         }
     }
 }
