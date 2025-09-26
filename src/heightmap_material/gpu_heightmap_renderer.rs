@@ -1,8 +1,10 @@
-use bevy::prelude::*;
+use bevy::ecs::error::info;
+use bevy::{log, prelude::*};
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
+use bevy_egui::EguiPrimaryContextPass;
 
-use crate::heightmap_material::{CompleteGpuHeightmapMaterial, GpuHeightmapMaterial};
+use crate::heightmap_material::{CompleteGpuHeightmapMaterial, GpuHeightmapMaterial, MaskedRiverWaterPlugin};
 use crate::rendering::complex_water::CompleteComplexWaterMaterial;
 
 #[derive(Component)]
@@ -49,8 +51,8 @@ impl Plugin for GpuHeightmapRendererPlugin {
             .init_resource::<GpuHeightmapRenderConfig>()
             .init_resource::<GpuTerrainState>()
             .init_resource::<LastWaterLevelOffset>()
+            .add_systems(EguiPrimaryContextPass, gpu_heightmap_render_ui)
             .add_systems(Update, (
-                gpu_heightmap_render_ui,
                 update_water_level_on_change,
             ));
     }
@@ -63,13 +65,14 @@ pub fn gpu_heightmap_render_ui(
     mut meshes: ResMut<Assets<Mesh>>,
     mut terrain_materials: ResMut<Assets<CompleteGpuHeightmapMaterial>>,
     mut water_materials: ResMut<Assets<CompleteComplexWaterMaterial>>,
+    //mut water_materials: ResMut<Assets<MaskedRiverWaterPlugin>>,
     terrain_query: Query<Entity, With<GpuHeightmapTerrain>>,
     water_query: Query<Entity, With<GpuHeightmapWater>>,
     terrain_state: Res<GpuTerrainState>,
 ) {
     bevy_egui::egui::Window::new("GPU Heightmap Renderer")
         .default_width(300.0)
-        .show(contexts.ctx_mut(), |ui| {
+        .show(contexts.ctx_mut().unwrap(), |ui| {
             ui.heading("GPU Render Settings");
             
             ui.add(bevy_egui::egui::Slider::new(&mut render_config.vertex_density, 64..=513)
@@ -252,40 +255,6 @@ fn create_water_plane_mesh(render_config: &GpuHeightmapRenderConfig) -> Mesh {
     mesh
 }
 
-// fn create_water_plane_mesh(render_config: &GpuHeightmapRenderConfig) -> Mesh {
-//     let half_size = render_config.chunk_size * 0.5;
-    
-//     let mut mesh = Mesh::new(
-//         PrimitiveTopology::TriangleList,
-//         RenderAssetUsages::RENDER_WORLD,
-//     );
-    
-//     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![
-//         [-half_size, 0.0, -half_size],
-//         [half_size, 0.0, -half_size],
-//         [half_size, 0.0, half_size],
-//         [-half_size, 0.0, half_size],
-//     ]);
-    
-//     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![
-//         [0.0, 1.0, 0.0],
-//         [0.0, 1.0, 0.0],
-//         [0.0, 1.0, 0.0],
-//         [0.0, 1.0, 0.0],
-//     ]);
-    
-//     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, vec![
-//         [0.0, 0.0],
-//         [1.0, 0.0],
-//         [1.0, 1.0],
-//         [0.0, 1.0],
-//     ]);
-    
-//     mesh.insert_indices(Indices::U32(vec![0, 2, 1, 0, 3, 2]));
-    
-//     mesh
-// }
-
 fn create_gpu_terrain_plane_mesh(render_config: &GpuHeightmapRenderConfig) -> Mesh {
     let width = render_config.vertex_density;
     let height = render_config.vertex_density;
@@ -365,9 +334,11 @@ fn update_water_level_on_change(
     
     if offset_diff > 0.01 && !water_query.is_empty() {
         info!("🌊 Updating water level from {:.2} to {:.2}", 
-              last_offset.offset, render_config.water_level_offset);
+        last_offset.offset, render_config.water_level_offset);
         
+
         for mut transform in water_query.iter_mut() {
+            log::info!("Water Y set to {}", transform.translation.y);
             transform.translation.y = render_config.water_level_offset;
         }
         

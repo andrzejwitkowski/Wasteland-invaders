@@ -1,7 +1,9 @@
 use bevy::{
-    pbr::{ExtendedMaterial, MaterialExtension}, prelude::*, reflect::Reflect, render::render_resource::{AsBindGroup, ShaderRef}
+    ecs::error::info, log, pbr::{ExtendedMaterial, MaterialExtension}, prelude::*, reflect::Reflect, render::render_resource::{AsBindGroup, ShaderRef}
 };
-use bevy_egui::{egui, EguiContexts};
+use bevy_egui::{egui, EguiContexts, EguiPrimaryContextPass};
+
+use crate::heightmap_material::GpuHeightmapRenderConfig;
 
 /// GPU Heightmap material matching the WGSL struct
 #[derive(Asset, AsBindGroup, Debug, Clone, Reflect)]
@@ -29,6 +31,9 @@ pub struct GpuHeightmapMaterial {
     // .x = octaves, .y = lacunarity, .z = persistence, .w = seed
     #[uniform(100)]
     pub noise_config: Vec4,
+
+    #[uniform(100)]
+    pub debug_options: Vec4,
 }
 
 #[derive(Resource)]
@@ -68,6 +73,10 @@ pub struct GpuHeightmapConfigUI {
     pub noise_lacunarity: f32,
     pub noise_persistence: f32,
     pub noise_seed: f32,
+
+    // NEW: debug toggle
+    pub show_water_mask: bool,
+    pub river_margin_rings: u32,
 }
 
 impl Default for GpuHeightmapMaterial {
@@ -79,6 +88,7 @@ impl Default for GpuHeightmapMaterial {
             terrain_features: Vec4::new(100.0, 0.8, 1.2, 0.5),
             river_position: Vec4::new(0.0, -200.0, 1.0, 0.2),
             noise_config: Vec4::new(6.0, 2.5, 0.5, 0.0),
+            debug_options: Vec4::new(0.0, 0.0, 0.0, 0.0),
         }
     }
 }
@@ -110,6 +120,8 @@ impl Default for GpuHeightmapConfigUI {
             noise_lacunarity: 2.5,
             noise_persistence: 0.5,
             noise_seed: 0.0,
+            show_water_mask: false,
+            river_margin_rings: 1,
         }
     }
 }
@@ -134,8 +146,8 @@ impl Plugin for GpuHeightmapTerrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<CompleteGpuHeightmapMaterial>::default())
             .init_resource::<GpuHeightmapConfigUI>()
+            .add_systems(EguiPrimaryContextPass, gpu_heightmap_ui_system)
             .add_systems(Update, (
-                gpu_heightmap_ui_system,
                 update_all_gpu_heightmap_materials,
             ));
     }
@@ -147,7 +159,7 @@ fn gpu_heightmap_ui_system(
 ) {
     egui::Window::new("GPU Heightmap Controls")
         .default_width(350.0)
-        .show(contexts.ctx_mut(), |ui| {
+        .show(contexts.ctx_mut().unwrap(), |ui| {
 
             ui.heading("Noise Settings");
 
@@ -235,57 +247,75 @@ fn gpu_heightmap_ui_system(
                 
             ui.add(egui::Slider::new(&mut config.river_dir_y, -1.0..=1.0)
                 .text("River Direction Y"));
+
+            ui.separator();
+            ui.heading("Debug");
+            ui.checkbox(&mut config.show_water_mask, "Show Water/River Mask");
+            ui.add(egui::Slider::new(&mut config.river_margin_rings, 0..=5).text("River Margin Rings"));
         });
 }
 
 fn update_all_gpu_heightmap_materials(
     config: Res<GpuHeightmapConfigUI>,
+    render_cfg: Option<Res<GpuHeightmapRenderConfig>>,
     mut materials: ResMut<Assets<CompleteGpuHeightmapMaterial>>,
 ) {
-    if config.is_changed() {
-        for (_, material) in materials.iter_mut() {
-            material.extension.terrain_params = Vec4::new(
-                config.terrain_scale,
-                config.terrain_amplitude,
-                config.river_depth,
-                config.seed,
-            );
-            
-            material.extension.river_params = Vec4::new(
-                config.river_width,
-                config.bank_slope_distance,
-                config.meander_frequency,
-                config.meander_amplitude,
-            );
-            
-            material.extension.erosion_params = Vec4::new(
-                config.erosion_strength,
-                config.erosion_radius,
-                config.valley_flattening,
-                config.erosion_smoothing,
-            );
-            
-            material.extension.terrain_features = Vec4::new(
-                config.flat_area_radius,
-                config.flat_area_strength,
-                config.hill_steepness,
-                config.terrain_roughness,
-            );
-            
-            material.extension.river_position = Vec4::new(
-                config.river_start_x,
-                config.river_start_y,
-                config.river_dir_x,
-                config.river_dir_y,
-            );
 
-            material.extension.noise_config = Vec4::new(
-                config.noise_octaves as f32,
-                config.noise_lacunarity,
-                config.noise_persistence,
-                config.noise_seed,
-            );
-        }
+    if!(config.is_changed() || render_cfg.as_ref().map_or(false, |r| r.is_changed())) {
+        return;
+    }
+
+   let cell_size = render_cfg
+        .as_ref()
+        .map(|rc| rc.chunk_size / (rc.vertex_density.saturating_sub(1) as f32))
+        .unwrap_or(1.0);
+
+    let margin_step_world = cell_size * config.river_margin_rings as f32;
+
+    for (_, material) in materials.iter_mut() {
+        material.extension.terrain_params = Vec4::new(
+            config.terrain_scale,
+            config.terrain_amplitude,
+            config.river_depth,
+            config.seed,
+        );
+        material.extension.river_params = Vec4::new(
+            config.river_width,
+            config.bank_slope_distance,
+            config.meander_frequency,
+            config.meander_amplitude,
+        );
+        material.extension.erosion_params = Vec4::new(
+            config.erosion_strength,
+            config.erosion_radius,
+            config.valley_flattening,
+            config.erosion_smoothing,
+        );
+        material.extension.terrain_features = Vec4::new(
+            config.flat_area_radius,
+            config.flat_area_strength,
+            config.hill_steepness,
+            config.terrain_roughness,
+        );
+        material.extension.river_position = Vec4::new(
+            config.river_start_x,
+            config.river_start_y,
+            config.river_dir_x,
+            config.river_dir_y,
+        );
+        material.extension.noise_config = Vec4::new(
+            config.noise_octaves as f32,
+            config.noise_lacunarity,
+            config.noise_persistence,
+            config.noise_seed,
+        );
+        // debug_options: x=show mask, y=margin step, z,w free
+        material.extension.debug_options = Vec4::new(
+            if config.show_water_mask { 1.0 } else { 0.0 },
+            margin_step_world,
+            0.0,
+            0.0,
+        );
     }
 }
 

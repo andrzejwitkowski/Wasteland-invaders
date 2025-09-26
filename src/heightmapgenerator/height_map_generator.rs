@@ -465,7 +465,7 @@ pub fn heightmap_ui(
 ) {
     bevy_egui::egui::Window::new("Heightmap Generator")
         .default_width(450.0)
-        .show(contexts.ctx_mut(), |ui| {
+        .show(contexts.ctx_mut().unwrap(), |ui| {
             ui.heading("Terrain Settings");
             
             ui.add(bevy_egui::egui::Slider::new(&mut config.terrain_amplitude, 10.0..=1000.0)

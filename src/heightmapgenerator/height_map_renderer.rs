@@ -66,7 +66,7 @@ pub fn heightmap_render_ui(
 ) {
     bevy_egui::egui::Window::new("Heightmap Renderer")
         .default_width(350.0)
-        .show(contexts.ctx_mut(), |ui| {
+        .show(contexts.ctx_mut().unwrap(), |ui| {
             ui.heading("Render Settings");
             
             ui.add(bevy_egui::egui::Slider::new(&mut render_config.vertex_density, 128..=1025)

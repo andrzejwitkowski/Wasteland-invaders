@@ -16,6 +16,7 @@ struct HeightmapMaterial {
     terrain_features: vec4<f32>,
     river_position: vec4<f32>,
     noise_config: vec4<f32>,
+    debug_options: vec4<f32>,         
 };
 
 // Bind material data to group 2 like your water shader
@@ -50,6 +51,20 @@ fn get_noise_octaves() -> i32 { return i32(heightmap_material.noise_config.x); }
 fn get_noise_lacunarity() -> f32 { return heightmap_material.noise_config.y; }
 fn get_noise_persistence() -> f32 { return heightmap_material.noise_config.z; }
 fn get_noise_seed() -> f32 { return heightmap_material.noise_config.w; }
+
+fn get_show_mask() -> f32 { return heightmap_material.debug_options.x; }
+fn get_mask_mode() -> f32 { return heightmap_material.debug_options.z; }
+
+fn get_cell_step() -> f32 {
+    let s = heightmap_material.debug_options.y;
+    return select(2.0, s, s > 0.0001);
+}
+
+// Helper to test if a world XZ position is a river (same criterion used in fragment)
+fn is_river_at(pos_xz: vec2<f32>) -> bool {
+    let h = generate_height(pos_xz);
+    return h < -get_river_depth() * 0.5;
+}
 
 // Add this rotation matrix function
 fn rotate2d(angle: f32) -> mat2x2<f32> {
@@ -493,6 +508,55 @@ fn fragment(
     let is_river = height < -get_river_depth() * 0.5;
     let is_mountain = height > get_terrain_amplitude() * 0.7;
     let is_flat = slope < 0.1;
+
+    var any_neighbor_river = false;
+    if (!is_river) {
+        let step = get_cell_step();
+        // Offsets for 8 neighbors
+        for (var dx = -1; dx <= 1; dx = dx + 1) {
+            for (var dz = -1; dz <= 1; dz = dz + 1) {
+                if (dx == 0 && dz == 0) { continue; }
+                let neighbor_pos = vec2(
+                    in.world_position.x + f32(dx) * step,
+                    in.world_position.z + f32(dz) * step
+                );
+                if (is_river_at(neighbor_pos)) {
+                    any_neighbor_river = true;
+                }
+            }
+        }
+    }
+    let is_river_margin = (!is_river) && any_neighbor_river;
+
+    // Water mask (core river OR water)
+    let water_mask = select(0.0, 1.0, (is_water || is_river));
+
+    // After computing is_river, is_river_margin, etc.
+    let mask_value = select(0.0, 1.0, is_river) +
+                     select(0.0, 0.5, (is_river_margin && !is_river));
+
+    // If explicit mask_mode (offscreen pass)
+    if (get_mask_mode() > 0.5) {
+        var out_mask: FragmentOutput;
+        out_mask.color = vec4<f32>(mask_value, mask_value, mask_value, 1.0);
+        return out_mask;
+    }
+
+    // Debug visualization:
+    // Red   = river core
+    // Yellow= river margin
+    // Green = other terrain
+    if (get_show_mask() > 0.5) {
+        var out_debug: FragmentOutput;
+        if (is_river) {
+            out_debug.color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
+        } else if (is_river_margin) {
+            out_debug.color = vec4<f32>(1.0, 1.0, 0.0, 1.0);
+        } else {
+            out_debug.color = vec4<f32>(0.0, 1.0, 0.0, 1.0);
+        }
+        return out_debug;
+    }
     
     // Terrain color blending
     var base_color: vec3<f32>;

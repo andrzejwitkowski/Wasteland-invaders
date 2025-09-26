@@ -122,20 +122,11 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.world_tangent = mesh_functions::mesh_tangent_local_to_world(world_from_local, vertex.tangent, vertex.instance_index);
 #endif
 
-    
-        // The 'color' field on VertexOutput is also guarded by an #ifdef.
-    // We only assign to it if the mesh has vertex colors.
 #ifdef VERTEX_UVS_B
     out.uv_b = vertex.uv_b;
 #endif
 
-#ifdef VERTEX_TANGENTS
-    out.world_tangent = mesh_functions::mesh_tangent_local_to_world(world_from_local, vertex.tangent, vertex.instance_index);
-#endif
-
 #ifdef VERTEX_COLORS
-    out.color = vertex.color;
-#endif
     out.instance_index = vertex.instance_index;
 
     return out;
