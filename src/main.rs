@@ -1,31 +1,16 @@
 mod rendering;
-mod terrain;
-mod riverbank;
-mod heightmapgenerator;
 mod flyby;
 mod heightmap_material;
 
-use bevy::core_pipeline::core_3d::Camera3dDepthTextureUsage;
-use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::prelude::*;
-use bevy::render::camera::ScalingMode;
-use bevy::render::camera::Viewport;
-use bevy::render::render_resource::TextureFormat;
-use bevy::render::settings::RenderCreation;
-use bevy::render::settings::WgpuFeatures;
-use bevy::render::settings::WgpuSettings;
-use bevy::render::RenderPlugin;
 use bevy_blendy_cameras::BlendyCamerasPlugin;
 use bevy_blendy_cameras::FlyCameraController;
 use bevy_blendy_cameras::OrbitCameraController;
 use bevy_egui::EguiPlugin;
-use crate::flyby::FlyByPlugin;
 use crate::flyby::RiverRaidCamera;
 use crate::heightmap_material::GpuHeightmapRendererPlugin;
 use crate::heightmap_material::GpuHeightmapTerrainPlugin;
 use crate::heightmap_material::MaskedRiverWaterPlugin;
-// Import the component instead
-use crate::rendering::ComplexWaterPlugin;
 
 use bevy::input::keyboard::KeyCode;
 
@@ -41,13 +26,11 @@ fn main() {
     }))
     .add_systems(Startup, (
         setup_camera_and_light,
-        crate::terrain::systems::setup_terrain_materials,
     ))
     .add_systems(Update, (
         camera_controls,
     ))
     .add_plugins(EguiPlugin::default())
-    // .add_plugins(ComplexWaterPlugin)
     .add_plugins(MaskedRiverWaterPlugin)
     .add_plugins(GpuHeightmapTerrainPlugin)
     .add_plugins(GpuHeightmapRendererPlugin)

@@ -5,8 +5,8 @@
 use bevy::prelude::*;
 use bevy_blendy_cameras::{FlyCameraController, OrbitCameraController};
 use bevy_egui::{egui, EguiContexts};
-use crate::heightmapgenerator::height_map_renderer::{HeightmapTerrain, HeightmapRenderConfig};
-use crate::heightmapgenerator::height_map_generator::{HeightmapNoise, HeightmapConfig};
+
+use crate::heightmap_material::{GpuHeightmapRenderConfig, GpuHeightmapTerrain};
 
 // ===== TURBULENCE TRAIT =====
 pub trait TurbulenceEffect {
@@ -170,7 +170,7 @@ fn flyby_ui_system(
     mut start_events: EventWriter<StartRiverRaidFlyby>,
     mut stop_events: EventWriter<StopRiverRaidFlyby>,
     mut restore_events: EventWriter<RestoreCameraPosition>,
-    terrain_query: Query<Entity, With<HeightmapTerrain>>,
+    terrain_query: Query<Entity, With<GpuHeightmapTerrain>>,
     original_camera_resource: Option<Res<OriginalCameraTransform>>,
     river_raid_camera: Query<&RiverRaidCamera>,
     mut flyby_state: ResMut<FlybyState>,
@@ -280,9 +280,9 @@ fn camera_event_handler_system(
     mut stop_events: EventReader<StopRiverRaidFlyby>,
     mut restore_events: EventReader<RestoreCameraPosition>,
     mut camera_query: Query<(Entity, &mut Transform, &mut OrbitCameraController, &mut FlyCameraController), With<Camera3d>>,
-    render_config: Res<HeightmapRenderConfig>,
-    heightmap_config: Res<HeightmapConfig>,
-    heightmap_noise: Res<HeightmapNoise>,
+    render_config: Res<GpuHeightmapRenderConfig>,
+    // heightmap_config: Res<GpuHeightmapConfig>,
+    // heightmap_noise: Res<HeightmapNoise>,
     original_camera_resource: Option<Res<OriginalCameraTransform>>,
     flyby_state: Res<FlybyState>,
     time: Res<Time>,
@@ -305,9 +305,9 @@ fn camera_event_handler_system(
             
             // Generate flight path waypoints
             let (waypoints, look_targets) = generate_smooth_river_path(
-                &heightmap_config, 
-                &heightmap_noise, 
-                &render_config, 
+                // &heightmap_config, 
+                // &heightmap_noise, 
+                // &render_config, 
                 &flyby_state
             );
             
@@ -446,9 +446,9 @@ fn animate_river_raid_camera(
 
 // ===== HELPER FUNCTIONS =====
 fn generate_smooth_river_path(
-    heightmap_config: &HeightmapConfig,
-    heightmap_noise: &HeightmapNoise,
-    render_config: &HeightmapRenderConfig,
+    // heightmap_config: &HeightmapConfig,
+    // heightmap_noise: &HeightmapNoise,
+    // render_config: &HeightmapRenderConfig,
     flyby_state: &FlybyState,
 ) -> (Vec<Vec3>, Vec<Vec3>) {
     let mut camera_waypoints = Vec::new();
@@ -456,16 +456,16 @@ fn generate_smooth_river_path(
     let num_points = 30;
     
     // Calculate river start and end
-    let river_start = heightmap_config.river_start;
-    let river_direction = heightmap_config.river_direction.normalize();
-    let river_length = render_config.chunk_size * 0.7;
+    let river_start = 0.0;
+    let river_direction = Vec2::new(1.0, 0.0).normalize();
+    let river_length = 0.0;
     let river_end = river_start + river_direction * river_length;
     
     for i in 0..=num_points {
         let progress = i as f32 / num_points as f32;
         
         // Create a mostly straight path with occasional gentle curves
-        let base_position = river_start.lerp(river_end, progress);
+        let base_position = 0.0; // river_start.lerp(river_end, progress);
         
         // Add very gentle meandering (much reduced from original)
         let meander_intensity = 1.0 - flyby_state.path_smoothness;
@@ -474,7 +474,7 @@ fn generate_smooth_river_path(
         let river_pos_2d = base_position + perpendicular * gentle_meander;
         
         // Get terrain height
-        let height = heightmap_noise.sample_height_with_river(river_pos_2d.x, river_pos_2d.y, heightmap_config);
+        let height = 0.0; //heightmap_noise.sample_height_with_river(river_pos_2d.x, river_pos_2d.y, heightmap_config);
         let river_pos = Vec3::new(river_pos_2d.x, height, river_pos_2d.y);
         
         // River direction in 3D
@@ -536,9 +536,9 @@ fn catmull_rom_interpolation(points: &[Vec3], t: f32) -> Vec3 {
 fn debug_path_system(
     flyby_state: Res<FlybyState>,
     mut gizmos: Gizmos,
-    render_config: Res<HeightmapRenderConfig>,
-    heightmap_config: Res<HeightmapConfig>,
-    heightmap_noise: Res<HeightmapNoise>,
+    // render_config: Res<HeightmapRenderConfig>,
+    // heightmap_config: Res<HeightmapConfig>,
+    // heightmap_noise: Res<HeightmapNoise>,
     river_raid_camera: Query<&RiverRaidCamera>,
     time: Res<Time>,
 ) {
@@ -547,9 +547,9 @@ fn debug_path_system(
     }
     
     let (camera_path_points, look_target_points) = generate_smooth_river_path(
-        &heightmap_config, 
-        &heightmap_noise, 
-        &render_config, 
+        // &heightmap_config, 
+        // &heightmap_noise, 
+        // &render_config, 
         &flyby_state
     );
     
